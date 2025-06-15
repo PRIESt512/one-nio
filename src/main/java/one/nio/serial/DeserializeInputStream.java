@@ -19,7 +19,6 @@ package one.nio.serial;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
 public class DeserializeInputStream extends InputStream {
@@ -108,7 +107,6 @@ public class DeserializeInputStream extends InputStream {
                     limit = address;
                 }
                 array = newArray;
-                segment = MemorySegment.ofArray(array);
                 offset = address;
             }
             if (offset + size > limit) fillArray(size);

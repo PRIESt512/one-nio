@@ -18,21 +18,13 @@ package one.nio.serial;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
-
-import static one.nio.util.JavaInternals.byteArrayOffset;
 
 public class DeserializeStream extends DataStream {
     private static final int INITIAL_CAPACITY = 24;
 
     protected Object[] context;
     protected int contextSize;
-
-    public DeserializeStream(MemorySegment segment) {
-        super(segment);
-        this.context = new Object[INITIAL_CAPACITY];
-    }
 
     public DeserializeStream(byte[] array) {
         super(array);

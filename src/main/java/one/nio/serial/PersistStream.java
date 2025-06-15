@@ -17,7 +17,6 @@
 package one.nio.serial;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 
 public class PersistStream extends SerializeStream {
@@ -40,10 +39,6 @@ public class PersistStream extends SerializeStream {
 
     public byte[] toByteArray() {
         return Arrays.copyOf(array, count());
-    }
-
-    public MemorySegment toReadOnlySegment() {
-        return segment.asReadOnly();
     }
 
     @Override
@@ -79,7 +74,6 @@ public class PersistStream extends SerializeStream {
         if ((offset = currentOffset + size) > limit) {
             limit = Math.max(offset, limit * 2);
             array = Arrays.copyOf(array, (int) (limit - address));
-            segment = MemorySegment.ofArray(array);
         }
         return currentOffset;
     }

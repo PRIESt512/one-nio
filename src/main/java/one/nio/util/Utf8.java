@@ -16,25 +16,26 @@
 
 package one.nio.util;
 
-import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.nio.ByteOrder;
 
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
-import static java.lang.foreign.ValueLayout.JAVA_LONG_UNALIGNED;
-import static java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED;
-import static one.nio.util.JavaInternals.*;
+import static one.nio.util.JavaInternals.getConstructor;
+import static one.nio.util.JavaInternals.getField;
 
 public final class Utf8 {
     private static final MethodHandle compactStringConstructor = getCompactStringConstructor();
-    private static final VarHandle B_HANDLE;
+    private static final VarHandle B_HANDLE_V;
+    private static final VarHandle SH_HANDLE_V;
+    private static final VarHandle I_HANDLE_V;
 
     static {
-        B_HANDLE = JAVA_BYTE.varHandle().withInvokeExactBehavior();
+        B_HANDLE_V = MethodHandles.arrayElementVarHandle(byte[].class);
+        SH_HANDLE_V = MethodHandles.byteArrayViewVarHandle(short[].class, ByteOrder.nativeOrder());
+        I_HANDLE_V = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.nativeOrder());
     }
 
     private static MethodHandle getCompactStringConstructor() {
@@ -83,35 +84,33 @@ public final class Utf8 {
     }
 
     public static int write(String s, byte[] buf, int start) {
-        MemorySegment memorySegment = MemorySegment.ofArray(buf);
-        return write(s, 0, s.length(), memorySegment, start);
+        return write(s, 0, s.length(), buf, start);
     }
 
     public static int write(String s, int stringStart, int maxChars, byte[] buf, int bufferStart) {
-        MemorySegment memorySegment = MemorySegment.ofArray(buf);
-        return write(s, stringStart, maxChars, memorySegment, bufferStart);
+        return write(s, stringStart, maxChars, (Object) buf, bufferStart);
     }
 
-    public static int write(String s, MemorySegment segment, long start) {
-        return write(s, 0, s.length(), segment, start);
+    public static int write(String s, byte[] array, long start) {
+        return write(s, 0, s.length(), array, start);
     }
 
-    public static int write(String s, int inStart, int inCount, MemorySegment segment, long outStart) {
+    public static int write(String s, int inStart, int inCount, Object array, long outStart) {
         int length = Math.min(s.length(), inStart + inCount);
         long pos = outStart;
 
         for (int i = inStart; i < length; i++) {
             int v = s.charAt(i);
             if (v <= 0x7f && v != 0) {
-                B_HANDLE.set(segment, pos++, (byte) v);
+                B_HANDLE_V.set(array, (int) pos++, (byte) v);
             } else if (v > 0x7ff) {
-                B_HANDLE.set(segment, pos, (byte) (0xe0 | (v >>> 12)));
-                B_HANDLE.set(segment, pos + 1, (byte) (0x80 | ((v >>> 6) & 0x3f)));
-                B_HANDLE.set(segment, pos + 2, (byte) (0x80 | (v & 0x3f)));
+                B_HANDLE_V.set(array, (int) pos, (byte) (0xe0 | (v >>> 12)));
+                B_HANDLE_V.set(array, (int) pos + 1, (byte) (0x80 | ((v >>> 6) & 0x3f)));
+                B_HANDLE_V.set(array, (int) pos + 2, (byte) (0x80 | (v & 0x3f)));
                 pos += 3;
             } else {
-                B_HANDLE.set(segment, pos, (byte) (0xc0 | (v >>> 6)));
-                B_HANDLE.set(segment, pos + 1, (byte) (0x80 | (v & 0x3f)));
+                B_HANDLE_V.set(array, (int) pos, (byte) (0xc0 | (v >>> 6)));
+                B_HANDLE_V.set(array, (int) pos + 1, (byte) (0x80 | (v & 0x3f)));
                 pos += 2;
             }
         }
@@ -119,24 +118,23 @@ public final class Utf8 {
     }
 
     public static int write(char[] c, int length, byte[] buf, int start) {
-        MemorySegment memorySegment = MemorySegment.ofArray(buf);
-        return write(c, length, memorySegment, start);
+        return write(c, length, buf, start);
     }
 
-    public static int write(char[] c, int length, MemorySegment segment, long start) {
+    public static int write(char[] c, int length, byte[] array, long start) {
         long pos = start;
         for (int i = 0; i < length; i++) {
             int v = c[i];
             if (v <= 0x7f && v != 0) {
-                B_HANDLE.set(segment, pos++, (byte) v);
+                B_HANDLE_V.set(array, pos++, (byte) v);
             } else if (v > 0x7ff) {
-                B_HANDLE.set(segment, pos, (byte) (0xe0 | (v >>> 12)));
-                B_HANDLE.set(segment, pos + 1, (byte) (0x80 | ((v >>> 6) & 0x3f)));
-                B_HANDLE.set(segment, pos + 2, (byte) (0x80 | (v & 0x3f)));
+                B_HANDLE_V.set(array, pos, (byte) (0xe0 | (v >>> 12)));
+                B_HANDLE_V.set(array, pos + 1, (byte) (0x80 | ((v >>> 6) & 0x3f)));
+                B_HANDLE_V.set(array, pos + 2, (byte) (0x80 | (v & 0x3f)));
                 pos += 3;
             } else {
-                B_HANDLE.set(segment, pos, (byte) (0xc0 | (v >>> 6)));
-                B_HANDLE.set(segment, pos + 1, (byte) (0x80 | (v & 0x3f)));
+                B_HANDLE_V.set(array, pos, (byte) (0xc0 | (v >>> 6)));
+                B_HANDLE_V.set(array, pos + 1, (byte) (0x80 | (v & 0x3f)));
                 pos += 2;
             }
         }
@@ -144,65 +142,64 @@ public final class Utf8 {
     }
 
     public static String read(byte[] buf, int start, int length) {
-        MemorySegment memorySegment = MemorySegment.ofArray(buf);
-        return read(memorySegment, start, length);
+        return read(buf, start, length);
     }
 
-    public static String read(MemorySegment segment, long start, int length) {
-        if (compactStringConstructor != null && isAsciiString(segment, start, length)) {
-            return toAsciiString(segment, start, length);
+    public static String read(byte[] array, long start, int length) {
+        if (compactStringConstructor != null && isAsciiString(array, start, length)) {
+            return toAsciiString(array, start, length);
         }
 
         char[] result = new char[length];
         int chars = 0;
         long end = start + length;
         for (long pos = start; pos < end; chars++) {
-            byte b = segment.get(JAVA_BYTE, pos);
+            byte b = (byte) B_HANDLE_V.get(array, (int) pos);
             if (b >= 0) {
                 result[chars] = (char) b;
                 pos++;
             } else if ((b & 0xe0) == 0xc0) {
-                result[chars] = (char) ((b & 0x1f) << 6 | (segment.get(JAVA_BYTE, pos + 1) & 0x3f));
+                result[chars] = (char) ((b & 0x1f) << 6 | ((byte) B_HANDLE_V.get(array, (int) pos + 1) & 0x3f));
                 pos += 2;
             } else {
-                result[chars] = (char) ((b & 0x0f) << 12 | (segment.get(JAVA_BYTE, pos + 1) & 0x3f) << 6 | (segment.get(JAVA_BYTE, pos + 2) & 0x3f));
+                result[chars] = (char) ((b & 0x0f) << 12 | ((byte) B_HANDLE_V.get(array, (int) pos + 1) & 0x3f) << 6 | ((byte) B_HANDLE_V.get(array, (int) pos + 2) & 0x3f));
                 pos += 3;
             }
         }
         return new String(result, 0, chars);
     }
 
-    private static boolean isAsciiString(MemorySegment segment, long start, int length) {
+    private static boolean isAsciiString(byte[] array, long start, int length) {
         while (length >= 8) {
-            if ((segment.get(JAVA_LONG_UNALIGNED, start) & 0x8080808080808080L) != 0) {
+            if (((byte) B_HANDLE_V.get(array, (int) start) & 0x8080808080808080L) != 0) {
                 return false;
             }
             start += 8;
             length -= 8;
         }
         if ((length & 4) != 0) {
-            if ((segment.get(JAVA_INT_UNALIGNED, start) & 0x80808080) != 0) {
+            if (((int) I_HANDLE_V.get(array, (int) start) & 0x80808080) != 0) {
                 return false;
             }
             start += 4;
         }
         if ((length & 2) != 0) {
-            if ((segment.get(JAVA_SHORT_UNALIGNED, start) & 0x8000) != 0) {
+            if (((short) SH_HANDLE_V.get(array, (int) start) & 0x8000) != 0) {
                 return false;
             }
             start += 2;
         }
         if ((length & 1) != 0) {
-            return segment.get(JAVA_BYTE, start) >= 0;
+            return (byte) B_HANDLE_V.get(array, (int) start) >= 0;
         }
         return true;
     }
 
     // Optimize instantiation of a compact string (JDK 9+)
-    // by calling a private String constructor
-    private static String toAsciiString(MemorySegment segment, long start, int length) {
+// by calling a private String constructor
+    private static String toAsciiString(byte[] array, long start, int length) {
         byte[] result = new byte[length];
-        MemorySegment.copy(segment, JAVA_BYTE, start, result, 0, length);
+        System.arraycopy(array, (int) start, result, 0, length);
         try {
             return (String) compactStringConstructor.invokeExact(result, (byte) 0);
         } catch (Throwable e) {
@@ -212,14 +209,12 @@ public final class Utf8 {
 
     public static byte[] toBytes(String s) {
         byte[] result = new byte[length(s)];
-        MemorySegment memorySegment = MemorySegment.ofArray(result);
-        write(s, memorySegment, 0);
+        write(s, result, 0);
         return result;
     }
 
     public static String toString(byte[] buf) {
-        MemorySegment memorySegment = MemorySegment.ofArray(buf);
-        return read(memorySegment, 0, buf.length);
+        return read(buf, 0, buf.length);
     }
 
     public static int indexOf(byte c, byte[] haystack) {
