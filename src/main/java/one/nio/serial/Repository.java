@@ -20,7 +20,6 @@ import one.nio.gen.BytecodeGenerator;
 import one.nio.mgt.Management;
 import one.nio.util.Base64;
 import one.nio.util.JavaInternals;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,14 +29,27 @@ import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 public class Repository {
     public static final Logger log = LoggerFactory.getLogger(Repository.class);
@@ -57,7 +69,7 @@ public class Repository {
     public static final MethodSerializer request =
             registerMethod(JavaInternals.findMethod(Repository.class, "requestSerializer", long.class));
 
-    public static final int SKIP_READ_OBJECT  = 1;
+    public static final int SKIP_READ_OBJECT = 1;
     public static final int SKIP_WRITE_OBJECT = 2;
     public static final int SKIP_CUSTOM_SERIALIZATION = SKIP_READ_OBJECT | SKIP_WRITE_OBJECT;
     public static final int INLINE = 4;
@@ -65,12 +77,12 @@ public class Repository {
     public static final int SYNTHETIC_FIELDS = 16;
     public static final int PROVIDE_GET_FIELD = 32;
 
-    public static final int ARRAY_STUBS      = 1;
+    public static final int ARRAY_STUBS = 1;
     public static final int COLLECTION_STUBS = 2;
-    public static final int MAP_STUBS        = 4;
-    public static final int ENUM_STUBS       = 8;
-    public static final int CUSTOM_STUBS     = 16;
-    public static final int DEFAULT_OPTIONS  = ARRAY_STUBS | COLLECTION_STUBS | MAP_STUBS | ENUM_STUBS | CUSTOM_STUBS;
+    public static final int MAP_STUBS = 4;
+    public static final int ENUM_STUBS = 8;
+    public static final int CUSTOM_STUBS = 16;
+    public static final int DEFAULT_OPTIONS = ARRAY_STUBS | COLLECTION_STUBS | MAP_STUBS | ENUM_STUBS | CUSTOM_STUBS;
 
     private static byte nextBootstrapUid = DataStream.FIRST_BOOT_UID;
     private static int options = Integer.getInteger("one.nio.serial.options", DEFAULT_OPTIONS);
@@ -88,6 +100,8 @@ public class Repository {
         addBootstrap(new DateSerializer());
         addBootstrap(new ClassSerializer());
         addBootstrap(new BitSetSerializer());
+        addBootstrap(new BigIntegerSerializer());
+        addBootstrap(new BigDecimalSerializer());
 
         addBootstrap(new BooleanArraySerializer());
         addBootstrap(new ByteArraySerializer());
@@ -144,6 +158,8 @@ public class Repository {
         classMap.put(char.class, classMap.get(Character.class));
         classMap.put(float.class, classMap.get(Float.class));
         classMap.put(double.class, classMap.get(Double.class));
+        classMap.put(BigInteger.class, classMap.get(BigInteger.class));
+        classMap.put(BigDecimal.class, classMap.get(BigDecimal.class));
 
         // Unable to run readObject/writeObject for the following classes.
         // Fortunately standard serialization works well for them.
@@ -151,8 +167,8 @@ public class Repository {
         setOptions(InetSocketAddress.class, SKIP_CUSTOM_SERIALIZATION);
         setOptions(StringBuilder.class, SKIP_CUSTOM_SERIALIZATION);
         setOptions(StringBuffer.class, SKIP_CUSTOM_SERIALIZATION);
-        setOptions(BigInteger.class, SKIP_CUSTOM_SERIALIZATION);
-        setOptions(BigDecimal.class, PROVIDE_GET_FIELD);
+//        setOptions(BigInteger.class, SKIP_CUSTOM_SERIALIZATION);
+//        setOptions(BigDecimal.class, PROVIDE_GET_FIELD);
 
         // At some moment InetAddress fields were moved to an auxilary holder class.
         // This resolves backward compatibility problem by inlining holder fields during serialization.

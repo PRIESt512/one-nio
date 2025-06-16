@@ -20,9 +20,9 @@ repositories {
 }
 
 dependencies {
-    implementation(group = "org.ow2.asm", name = "asm", version = "9.2")
+    implementation(group = "org.ow2.asm", name = "asm", version = "9.8")
     implementation(group = "org.slf4j", name = "slf4j-api", version = "1.7.36")
-
+    implementation("org.ow2.asm:asm-util:9.8")
     implementation("org.openjdk.jmh:jmh-core:1.37")
     annotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 
