@@ -1,5 +1,7 @@
 package one.nio.serial;
 
+import one.nio.util.Utf8;
+
 import java.io.IOException;
 import java.math.BigInteger;
 
@@ -80,7 +82,7 @@ public class BigIntegerSerializer extends Serializer<BigInteger> {
 
     @Override
     public void calcSize(BigInteger value, CalcSizeStream css) throws IOException {
-        css.count += value.bitLength() / 8 + 1;
+        css.count += Utf8.length(value.toString());
     }
 
     @Override
