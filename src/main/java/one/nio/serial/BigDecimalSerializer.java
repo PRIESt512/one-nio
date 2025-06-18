@@ -20,7 +20,7 @@ public class BigDecimalSerializer extends Serializer<BigDecimal> {
 
     static {
         try {
-            var look = MethodHandles.privateLookupIn(BigDecimal.class, MethodHandles.lookup());
+            MethodHandles.Lookup look = MethodHandles.lookup();
 
             Field intVal = BigDecimal.class.getDeclaredField("intVal");
             intVal.setAccessible(true);

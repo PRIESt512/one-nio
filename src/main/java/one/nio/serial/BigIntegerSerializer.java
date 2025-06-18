@@ -26,7 +26,7 @@ public class BigIntegerSerializer extends Serializer<BigInteger> {
 
     static {
         try {
-            var look = MethodHandles.privateLookupIn(BigInteger.class, MethodHandles.lookup());
+            MethodHandles.Lookup look = MethodHandles.lookup();
 
             Field signum = BigInteger.class.getDeclaredField("signum");
             signum.setAccessible(true);
