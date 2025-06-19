@@ -36,14 +36,21 @@ java {
 }
 
 tasks.withType<JavaCompile> {
-    sourceCompatibility = "22"
-    targetCompatibility = "22"
+    sourceCompatibility = "23"
+    targetCompatibility = "23"
     options.encoding = "UTF-8"
     options.compilerArgs = options.compilerArgs + "-Xlint:all"
     options.compilerArgs = options.compilerArgs + "--add-opens=java.base/sun.security=ALL-UNNAMED"
 }
 tasks.withType<Test> {
     useJUnit()
+
+//    --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+//    --add-opens=java.base/java.lang=ALL-UNNAMED
+//    --add-opens=java.base/java.time=ALL-UNNAMED
+//    --add-opens=java.base/java.math=ALL-UNNAMED
+//    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    jvmArgs = listOf("--add-opens=java.base/java.math=ALL-UNNAMED")
     testLogging {
         debug {
             events("started", "skipped", "failed")

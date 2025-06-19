@@ -33,6 +33,7 @@ import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
@@ -105,7 +106,7 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
 //        mv.visitFieldInsn(opcode, holder, name, sig);
         mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitFieldInsn(Opcodes.GETSTATIC, className,
-                getMethodHandleName(name, "GET"), "Ljava/lang/invoke/MethodHandle;");
+                getMethodHandleName(name, "GET", f.getType()), "Ljava/lang/invoke/MethodHandle;");
         mv.visitVarInsn(Opcodes.ALOAD, 1);
         String desc = "(L" + holder + ";)" + sig;
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
@@ -175,8 +176,10 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         return b.append(')').append(Type.getDescriptor(method.returnType())).toString();
     }
 
-    private static String getMethodHandleName(String fieldName, String type) {
-        return fieldName.toUpperCase() + "_" + type + "_METHOD_HANDLE";
+    private static String getMethodHandleName(String fieldName, String accesType, Class type) {
+        String[] t = type.getName().split(Pattern.quote("."));
+        String name = t[t.length - 1];
+        return fieldName.toUpperCase() + "_" + accesType + "_METHOD_HANDLE_" + name;
     }
 
     public static void emitInvoke(MethodVisitor mv, Constructor c) {
