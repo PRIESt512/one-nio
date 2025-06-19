@@ -33,10 +33,6 @@ public class MagicAccessor {
         return generateClass("jdk/internal/reflect/MagicAccessorBridge", superClass);
     }
 
-    public static byte[] sunMagicAccessor() {
-        return generateClass(DelegateGenerator.MAGIC_CLASS, "jdk/internal/reflect/MagicAccessorBridge");
-    }
-
     private static boolean useSerializationConstructorAccessor() {
         String javaVersion = System.getProperty("java.version");
         final int indexOfDot = javaVersion.indexOf(".");

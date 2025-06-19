@@ -16,9 +16,12 @@
 
 package one.nio.gen;
 
-import static java.nio.file.StandardOpenOption.CREATE;
-import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
-import static java.nio.file.StandardOpenOption.WRITE;
+import one.nio.mgt.Management;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandleInfo;
@@ -30,12 +33,10 @@ import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicInteger;
-import one.nio.mgt.Management;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorMXBean, Opcodes {
     private static final Logger log = LoggerFactory.getLogger(BytecodeGenerator.class);
@@ -96,20 +97,38 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         }
     }
 
-    public static void emitGetField(MethodVisitor mv, Field f) {
-        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? GETSTATIC : GETFIELD;
+    public static void emitGetField(MethodVisitor mv, String className, Field f) {
+//        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? GETSTATIC : GETFIELD;
         String holder = Type.getInternalName(f.getDeclaringClass());
         String name = f.getName();
         String sig = Type.getDescriptor(f.getType());
-        mv.visitFieldInsn(opcode, holder, name, sig);
+//        mv.visitFieldInsn(opcode, holder, name, sig);
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
+        mv.visitFieldInsn(Opcodes.GETSTATIC, className,
+                getMethodHandleName(name, "GET"), "Ljava/lang/invoke/MethodHandle;");
+        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        String desc = "(L" + holder + ";)" + sig;
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
+                "invokeExact", desc, false);
     }
 
-    public static void emitPutField(MethodVisitor mv, Field f) {
-        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? PUTSTATIC : PUTFIELD;
+    public static void emitPutField(MethodVisitor mv, String className, Field f) {
+//        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? PUTSTATIC : PUTFIELD;
         String holder = Type.getInternalName(f.getDeclaringClass());
         String name = f.getName();
         String sig = Type.getDescriptor(f.getType());
-        mv.visitFieldInsn(opcode, holder, name, sig);
+//        mv.visitFieldInsn(opcode, holder, name, sig);
+
+//        mv.visitFieldInsn(Opcodes.GETSTATIC, className,
+//                getMethodHandleName(name, "SET"), "Ljava/lang/invoke/MethodHandle;");
+//        mv.visitVarInsn(Opcodes.ALOAD, 2);
+//        mv.visitVarInsn(Opcodes.ALOAD, 1);
+//        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "one/nio/serial/DataStream",
+//                "readObject", "()Ljava/lang/Object;", false);
+//        mv.visitTypeInsn(Opcodes.CHECKCAST, sig);
+//        String desc = "(L" + holder + ";" + sig + ")V";
+//        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
+//                "invokeExact", desc, false);
     }
 
     public static void emitInvoke(MethodVisitor mv, Method m) {
@@ -154,6 +173,10 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
             b.append(Type.getDescriptor(parameter));
         }
         return b.append(')').append(Type.getDescriptor(method.returnType())).toString();
+    }
+
+    private static String getMethodHandleName(String fieldName, String type) {
+        return fieldName.toUpperCase() + "_" + type + "_METHOD_HANDLE";
     }
 
     public static void emitInvoke(MethodVisitor mv, Constructor c) {
