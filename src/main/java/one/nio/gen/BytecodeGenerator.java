@@ -157,7 +157,7 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         } else if (name.equalsIgnoreCase("[D")) {
             return "double_array";
         }
-        return name.replaceAll(";", "").replaceAll(Pattern.quote("$"), "");
+        return name.replace(";", "").replace(Pattern.quote("$"), "");
     }
 
     public static void emitInvoke(MethodVisitor mv, Method m) {
