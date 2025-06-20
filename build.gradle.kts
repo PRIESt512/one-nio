@@ -50,7 +50,7 @@ tasks.withType<Test> {
 //    --add-opens=java.base/java.time=ALL-UNNAMED
 //    --add-opens=java.base/java.math=ALL-UNNAMED
 //    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-    jvmArgs = listOf("--add-opens=java.base/java.math=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED")
+    jvmArgs = listOf("--add-opens=java.base/java.math=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.net=ALL-UNNAMED")
     testLogging {
         debug {
             events("started", "skipped", "failed")

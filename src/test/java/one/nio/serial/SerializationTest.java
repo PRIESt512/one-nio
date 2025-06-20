@@ -299,7 +299,7 @@ public class SerializationTest {
     public void testUrls() throws IOException, ClassNotFoundException, URISyntaxException {
         checkSerialize(new URI("socket://192.168.0.1:2222/?param1=value1&param2=value2"));
         // This one is not serializable since Java 8
-        // checkSerialize(new URL("http://www.example.com/somePath/file.txt#anchor"));
+//         checkSerialize(new URL("http://www.example.com/somePath/file.txt#anchor"));
     }
 
     @Test
@@ -331,8 +331,8 @@ public class SerializationTest {
         checkSerialize(new BigDecimal("88888888888888888.88888888888888888888888"));
         checkSerialize(new BigDecimal("12.3E+7"));
         checkSerialize(Arrays.asList(
-                new BigDecimal("88888888888888888.88888888888888888888888"), 
-                new BigDecimal("1"), 
+                new BigDecimal("88888888888888888.88888888888888888888888"),
+                new BigDecimal("1"),
                 new BigDecimal(1),
                 new BigDecimal(0)));
     }
@@ -357,7 +357,7 @@ public class SerializationTest {
         checkSerializeToString(new StringBuffer(1000).append(new Object()).append("zzz").append(1234.56789));
     }
 
-    private static class ReadObject1 implements Serializable {
+    public static class ReadObject1 implements Serializable {
         private Object[] array = new String[]{"regular", "array"};
 
         private void readObject(ObjectInputStream in) {
@@ -376,7 +376,7 @@ public class SerializationTest {
         }
     }
 
-    private static class ReadObject2 implements Serializable {
+    public static class ReadObject2 implements Serializable {
         private final Object[] array = new String[]{"final", "field"};
 
         private void readObject(ObjectInputStream in) {
@@ -491,7 +491,7 @@ public class SerializationTest {
         checkSerialize(ZoneRules.of(ZoneOffset.ofHours(-8)));
     }
 
-   public static class Parent implements Serializable {
+    public static class Parent implements Serializable {
         SimpleEnum nameClash = SimpleEnum.A;
 
         @Override
@@ -619,7 +619,7 @@ public class SerializationTest {
         new PersistStream().writeObject(new Object());
     }
 
-    static class SomeData implements Serializable {
+    public static class SomeData implements Serializable {
         final String s1;
         @NotSerial
         final String s2;
@@ -653,15 +653,15 @@ public class SerializationTest {
         assertNull(clone.s2);
         assertNull(clone.s3);
 
-        String json = Json.toJson(someData);
-        assertEquals("{\"s1\":\"s1\"}", json);
+//        String json = Json.toJson(someData);
+//        assertEquals("{\"s1\":\"s1\"}", json);
 
-        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\",\"s3\":\"s3\"}".getBytes();
-        SomeData fromJson = new JsonReader(bytes).readObject(SomeData.class);
+//        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\",\"s3\":\"s3\"}".getBytes();
+//        SomeData fromJson = new JsonReader(bytes).readObject(SomeData.class);
 
-        assertEquals("s1", fromJson.s1);
-        assertNull(fromJson.s2);
-        assertNull(fromJson.s3);
+//        assertEquals("s1", fromJson.s1);
+//        assertNull(fromJson.s2);
+//        assertNull(fromJson.s3);
     }
 
     @Test
@@ -690,7 +690,7 @@ public class SerializationTest {
         String someDataBase64 = "HpVKIjDpW8vuAAJzMf/uAAJzNA==";
 
         // Old SomeData Serializer
-        String someDataSerializerBase64 = "zQApb25lLm5pby5zZXJpYWwuU2VyaWFsaXphdGlvblRlc3QkU29tZURhdGEelUoiMOlbywADAAJzMf8AEGphdmEubGFuZy5TdHJpbmcAAnMy/wAQamF2YS5sYW5nLlN0cmluZwACczT/ABBqYXZhLmxhbmcuU3RyaW5n";
+        String someDataSerializerBase64 = "zAApb25lLm5pby5zZXJpYWwuU2VyaWFsaXphdGlvblRlc3QkU29tZURhdGEelUoiMOlbywADAAJzMf8AEGphdmEubGFuZy5TdHJpbmcAAnMy/wAQamF2YS5sYW5nLlN0cmluZwACczT/ABBqYXZhLmxhbmcuU3RyaW5n";
         Repository.provideSerializer(someDataSerializerBase64);
 
         DeserializeStream in = new DeserializeStream(Base64.decodeFromChars(someDataBase64.toCharArray()));

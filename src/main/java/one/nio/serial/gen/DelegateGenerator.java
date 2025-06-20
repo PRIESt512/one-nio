@@ -32,6 +32,9 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.invoke.MethodHandleInfo;
@@ -93,13 +96,13 @@ public class DelegateGenerator extends BytecodeGenerator {
         generateToJson(cv, cls, className, fds);
         generateFromJson(cv, cls, fds, defaultFields, className);
 
-//        try (FileOutputStream fos = new FileOutputStream("Delegate0.class")) {
-//            fos.write(cv.toByteArray());
-//        } catch (FileNotFoundException e) {
-//            throw new RuntimeException(e);
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
+        try (FileOutputStream fos = new FileOutputStream("Delegate0.class")) {
+            fos.write(cv.toByteArray());
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         cv.visitEnd();
         return cv.toByteArray();
@@ -148,6 +151,9 @@ public class DelegateGenerator extends BytecodeGenerator {
         }
 
         for (FieldDescriptor fd : fds) {
+            if (isNotSerial(fd.ownField())) {
+                continue;
+            }
             cv.visitField(
                     ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
                     getMethodHandleName(fd.name(), "GET", fd.ownField().getType()),
@@ -262,6 +268,9 @@ public class DelegateGenerator extends BytecodeGenerator {
     }
 
     private static void generateMethodHandleInit(MethodVisitor mv, Class cls, String className, FieldDescriptor fd) {
+        if (isNotSerial(fd.ownField())) {
+            return;
+        }
         mv.visitLdcInsn(Type.getType(fd.ownField().getDeclaringClass()));
         mv.visitLdcInsn(fd.name());
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Class", "getDeclaredField",
@@ -377,16 +386,13 @@ public class DelegateGenerator extends BytecodeGenerator {
             Class sourceClass = fd.type().resolve();
             FieldType srcType = FieldType.valueOf(sourceClass);
 
-//                mv.visitVarInsn(ALOAD, 2);
-
             if (isNotSerial(ownField)) {
+                mv.visitVarInsn(ALOAD, 2);
                 mv.visitInsn(FieldType.Void.convertTo(srcType));
             } else {
 //                    mv.visitVarInsn(ALOAD, 1);
                 if (fd.parentField() != null) emitGetField(mv, classname, fd.parentField());
                 emitGetSerialField(mv, classname, ownField);
-                String sig = Type.getDescriptor(ownField.getType());
-//                    mv.visitTypeInsn(Opcodes.CHECKCAST, sig);
                 emitTypeCast(mv, ownField.getType(), sourceClass);
             }
 
@@ -559,15 +565,15 @@ public class DelegateGenerator extends BytecodeGenerator {
             }
         }
 
-//        for (FieldDescriptor defaultField : defaultFields) {
-//            setDefaultField(mv, defaultField, isRecord, className);
-//        }
-//
-//        if (isRecord) {
-//            generateCreateRecord(mv, cls, fds, defaultFields);
-//        }
+        for (FieldDescriptor defaultField : defaultFields) {
+            setDefaultField(mv, defaultField, isRecord, className);
+        }
 
-//        emitReadObject(cls, mv, className);
+        if (isRecord) {
+            generateCreateRecord(mv, cls, fds, defaultFields);
+        }
+
+        emitReadObject(cls, mv, className);
 
 //        // return value
 //        mv.visitVarInsn(Opcodes.ALOAD, 2);
