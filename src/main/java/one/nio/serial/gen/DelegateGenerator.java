@@ -124,8 +124,11 @@ public class DelegateGenerator extends BytecodeGenerator {
     }
 
     private static void generateMethodHandleFields(ClassWriter cv, Class cls, String className, FieldDescriptor[] fds) {
+        boolean isException = Throwable.class.isAssignableFrom(cls);
+
         MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
-        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "writeObject", methodType);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
+                "writeObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
             cv.visitField(
                     ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
@@ -181,16 +184,26 @@ public class DelegateGenerator extends BytecodeGenerator {
 
         mv.visitLabel(tryStart);
 
-        mv.visitLdcInsn(Type.getType(cls));
+        if (isException) {
+            mv.visitLdcInsn(Type.getType(Throwable.class));
+        } else {
+            mv.visitLdcInsn(Type.getType(cls));
+        }
         mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/invoke/MethodHandles", "lookup",
                 "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
         mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/invoke/MethodHandles", "privateLookupIn",
                 "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 0);
 
+        //generate for read/writeObject
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
             mv.visitVarInsn(Opcodes.ALOAD, 0);
-            mv.visitLdcInsn(Type.getType(cls));
+            if (isException) {
+                mv.visitLdcInsn(Type.getType(Throwable.class));
+            } else {
+                mv.visitLdcInsn(Type.getType(cls));
+            }
+
             mv.visitLdcInsn("writeObject");
             mv.visitMethodInsn(Opcodes.INVOKESTATIC, "one/nio/util/MethodHandlesReflection", "findMethodTypeForWriteObject",
                     "()Ljava/lang/invoke/MethodType;", false);
@@ -200,7 +213,11 @@ public class DelegateGenerator extends BytecodeGenerator {
                     "Ljava/lang/invoke/MethodHandle;");
 
             mv.visitVarInsn(Opcodes.ALOAD, 0);
-            mv.visitLdcInsn(Type.getType(cls));
+            if (isException) {
+                mv.visitLdcInsn(Type.getType(Throwable.class));
+            } else {
+                mv.visitLdcInsn(Type.getType(cls));
+            }
             mv.visitLdcInsn("readObject");
             mv.visitMethodInsn(Opcodes.INVOKESTATIC, "one/nio/util/MethodHandlesReflection", "findMethodTypeForReadObject",
                     "()Ljava/lang/invoke/MethodType;", false);
@@ -393,8 +410,10 @@ public class DelegateGenerator extends BytecodeGenerator {
     }
 
     private static void emitWriteObject(Class cls, String className, MethodVisitor mv) {
+        boolean isException = Throwable.class.isAssignableFrom(cls);
+
         MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
-        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "writeObject", methodType);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls, "writeObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
             mv.visitVarInsn(ALOAD, 1);
             mv.visitVarInsn(ASTORE, 3);
@@ -402,7 +421,12 @@ public class DelegateGenerator extends BytecodeGenerator {
             mv.visitVarInsn(ALOAD, 3);
             mv.visitFieldInsn(Opcodes.GETSTATIC, "one/nio/serial/gen/NullObjectOutputStream", "INSTANCE",
                     "Lone/nio/serial/gen/NullObjectOutputStream;");
+
             String oneParam = Type.getDescriptor(cls);
+
+            if (isException) {
+                oneParam = Type.getDescriptor(Throwable.class);
+            }
             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact",
                     "(" + oneParam + "Ljava/io/ObjectOutputStream;)V", false);
         }
@@ -578,8 +602,9 @@ public class DelegateGenerator extends BytecodeGenerator {
     }
 
     private static void emitReadObject(Class cls, MethodVisitor mv, String className) {
+        boolean isException = Throwable.class.isAssignableFrom(cls);
         MethodType methodType = MethodType.methodType(void.class, ObjectInputStream.class);
-        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "readObject", methodType);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls, "readObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_READ_OBJECT)) {
             if (!Repository.hasOptions(m.getDeclaringClass(), Repository.PROVIDE_GET_FIELD)) {
                 mv.visitFieldInsn(GETSTATIC, "one/nio/serial/gen/NullObjectInputStream", "INSTANCE", "Lone/nio/serial/gen/NullObjectInputStream;");

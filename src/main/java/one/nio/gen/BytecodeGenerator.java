@@ -134,10 +134,10 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         if (accessType == null) {
             accessType = "";
         }
-        return fieldName.toUpperCase() + "_" + accessType + "_" + getName(type).toUpperCase() + "_MH";
+        return fieldName.toUpperCase() + "_" + accessType + "_" + buildNameForMethodHandle(type).toUpperCase() + "_MH";
     }
 
-    private static String getName(Class type) {
+    private static String buildNameForMethodHandle(Class type) {
         String[] t = type.getName().split(Pattern.quote("."));
         String name = t[t.length - 1];
         if (name.equalsIgnoreCase("[Z")) {
@@ -157,9 +157,8 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         } else if (name.equalsIgnoreCase("[D")) {
             return "double_array";
         }
-        return name;
+        return name.replaceAll(";", "").replaceAll(Pattern.quote("$"), "");
     }
-
 
     public static void emitInvoke(MethodVisitor mv, Method m) {
         int opcode;
