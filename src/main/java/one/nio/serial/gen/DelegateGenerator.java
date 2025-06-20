@@ -32,9 +32,6 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.invoke.MethodHandleInfo;
@@ -51,7 +48,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 
 public class DelegateGenerator extends BytecodeGenerator {
     private static final AtomicInteger index = new AtomicInteger();
@@ -97,13 +93,13 @@ public class DelegateGenerator extends BytecodeGenerator {
         generateToJson(cv, cls, className, fds);
         generateFromJson(cv, cls, fds, defaultFields, className);
 
-        try (FileOutputStream fos = new FileOutputStream("Delegate0.class")) {
-            fos.write(cv.toByteArray());
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+//        try (FileOutputStream fos = new FileOutputStream("Delegate0.class")) {
+//            fos.write(cv.toByteArray());
+//        } catch (FileNotFoundException e) {
+//            throw new RuntimeException(e);
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
 
         cv.visitEnd();
         return cv.toByteArray();
@@ -127,8 +123,27 @@ public class DelegateGenerator extends BytecodeGenerator {
         mv.visitEnd();
     }
 
-
     private static void generateMethodHandleFields(ClassWriter cv, Class cls, String className, FieldDescriptor[] fds) {
+        MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "writeObject", methodType);
+        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
+            cv.visitField(
+                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                    getMethodHandleName("WRITE_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;",
+                    null,
+                    null
+            ).visitEnd();
+
+            cv.visitField(
+                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                    getMethodHandleName("READ_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;",
+                    null,
+                    null
+            ).visitEnd();
+        }
+
         for (FieldDescriptor fd : fds) {
             cv.visitField(
                     ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
@@ -166,65 +181,84 @@ public class DelegateGenerator extends BytecodeGenerator {
 
         mv.visitLabel(tryStart);
 
+        mv.visitLdcInsn(Type.getType(cls));
         mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/invoke/MethodHandles", "lookup",
                 "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/invoke/MethodHandles", "privateLookupIn",
+                "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 0);
+
+        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitLdcInsn(Type.getType(cls));
+            mv.visitLdcInsn("writeObject");
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, "one/nio/util/MethodHandlesReflection", "findMethodTypeForWriteObject",
+                    "()Ljava/lang/invoke/MethodType;", false);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandles$Lookup", "findVirtual",
+                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;", false);
+            mv.visitFieldInsn(Opcodes.PUTSTATIC, className, getMethodHandleName("WRITE_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;");
+
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitLdcInsn(Type.getType(cls));
+            mv.visitLdcInsn("readObject");
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, "one/nio/util/MethodHandlesReflection", "findMethodTypeForReadObject",
+                    "()Ljava/lang/invoke/MethodType;", false);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandles$Lookup", "findVirtual",
+                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;", false);
+            mv.visitFieldInsn(Opcodes.PUTSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;");
+        }
 
         for (FieldDescriptor fd : fds) {
             generateMethodHandleInit(mv, cls, className, fd);
         }
 
         mv.visitLabel(tryEnd);
-        mv.visitInsn(Opcodes.RETURN);
+        Label end = new Label();
+        mv.visitJumpInsn(Opcodes.GOTO, end);
 
         // Catch ReflectiveOperationException
         mv.visitLabel(catchReflective);
-        mv.visitVarInsn(Opcodes.ASTORE, 1);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
         mv.visitTypeInsn(Opcodes.NEW, "java/lang/ExceptionInInitializerError");
         mv.visitInsn(Opcodes.DUP);
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/ExceptionInInitializerError", "<init>",
                 "(Ljava/lang/Throwable;)V", false);
         mv.visitInsn(Opcodes.ATHROW);
 
         // Catch Throwable
         mv.visitLabel(catchThrowable);
-        mv.visitVarInsn(Opcodes.ASTORE, 1);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
         mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
         mv.visitInsn(Opcodes.DUP);
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
                 "(Ljava/lang/Throwable;)V", false);
         mv.visitInsn(Opcodes.ATHROW);
 
+        mv.visitLabel(end);
+        mv.visitInsn(Opcodes.RETURN);
         mv.visitMaxs(0, 0);
         mv.visitEnd();
     }
 
-    private static String getMethodHandleName(String fieldName, String accesType, Class type) {
-        //TODO: поправить логику
-        String[] t = type.getName().split(Pattern.quote("."));
-        String name = t[t.length - 1];
-        return fieldName.toUpperCase() + "_" + accesType + "_METHOD_HANDLE_" + name;
-    }
-
     private static void generateMethodHandleInit(MethodVisitor mv, Class cls, String className, FieldDescriptor fd) {
-//        mv.visitLdcInsn(Type.getType(cls));
         mv.visitLdcInsn(Type.getType(fd.ownField().getDeclaringClass()));
         mv.visitLdcInsn(fd.name());
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Class", "getDeclaredField",
                 "(Ljava/lang/String;)Ljava/lang/reflect/Field;", false);
-        mv.visitVarInsn(Opcodes.ASTORE, 1);
-//        emitTypeCast(mv, fd.ownField().getType(), fd.type().resolve());
+        mv.visitVarInsn(Opcodes.ASTORE, 2);
 
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitInsn(Opcodes.ICONST_1);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/reflect/Field", "setAccessible",
                 "(Z)V", false);
 
         // Setter
         mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandles$Lookup",
                 "unreflectSetter", "(Ljava/lang/reflect/Field;)Ljava/lang/invoke/MethodHandle;", false);
         mv.visitFieldInsn(Opcodes.PUTSTATIC, className,
@@ -232,7 +266,7 @@ public class DelegateGenerator extends BytecodeGenerator {
 
         // Getter
         mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandles$Lookup",
                 "unreflectGetter", "(Ljava/lang/reflect/Field;)Ljava/lang/invoke/MethodHandle;", false);
         mv.visitFieldInsn(Opcodes.PUTSTATIC, className,
@@ -255,7 +289,7 @@ public class DelegateGenerator extends BytecodeGenerator {
         emitTypeCast(mv, Object.class, cls);
         mv.visitVarInsn(ASTORE, 1);
 
-        emitWriteObject(cls, mv);
+        emitWriteObject(cls, className, mv);
 
         int primitiveFieldsSize = 0;
 
@@ -319,7 +353,7 @@ public class DelegateGenerator extends BytecodeGenerator {
         emitTypeCast(mv, Object.class, cls);
         mv.visitVarInsn(ASTORE, 1);
 
-        emitWriteObject(cls, mv);
+        emitWriteObject(cls, classname, mv);
 
         for (FieldDescriptor fd : fds) {
             Field ownField = fd.ownField();
@@ -358,13 +392,19 @@ public class DelegateGenerator extends BytecodeGenerator {
         mv.visitEnd();
     }
 
-    private static void emitWriteObject(Class cls, MethodVisitor mv) {
+    private static void emitWriteObject(Class cls, String className, MethodVisitor mv) {
         MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
         MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "writeObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
             mv.visitVarInsn(ALOAD, 1);
-            mv.visitFieldInsn(GETSTATIC, "one/nio/serial/gen/NullObjectOutputStream", "INSTANCE", "Lone/nio/serial/gen/NullObjectOutputStream;");
-            emitInvoke(mv, m);
+            mv.visitVarInsn(ASTORE, 3);
+            mv.visitFieldInsn(GETSTATIC, className, getMethodHandleName("WRITE_OBJECT", null, Void.class), "Ljava/lang/invoke/MethodHandle;");
+            mv.visitVarInsn(ALOAD, 3);
+            mv.visitFieldInsn(Opcodes.GETSTATIC, "one/nio/serial/gen/NullObjectOutputStream", "INSTANCE",
+                    "Lone/nio/serial/gen/NullObjectOutputStream;");
+            String oneParam = Type.getDescriptor(cls);
+            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact",
+                    "(" + oneParam + "Ljava/io/ObjectOutputStream;)V", false);
         }
     }
 
@@ -419,6 +459,9 @@ public class DelegateGenerator extends BytecodeGenerator {
                         "invokeExact", desc, false);
             }
         }
+
+
+        emitReadObject(cls, mv, className);
 
         // return value
         mv.visitVarInsn(Opcodes.ALOAD, 2);
@@ -538,19 +581,19 @@ public class DelegateGenerator extends BytecodeGenerator {
         MethodType methodType = MethodType.methodType(void.class, ObjectInputStream.class);
         MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(cls, "readObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_READ_OBJECT)) {
-            mv.visitInsn(DUP);
             if (!Repository.hasOptions(m.getDeclaringClass(), Repository.PROVIDE_GET_FIELD)) {
                 mv.visitFieldInsn(GETSTATIC, "one/nio/serial/gen/NullObjectInputStream", "INSTANCE", "Lone/nio/serial/gen/NullObjectInputStream;");
             } else {
-                mv.visitInsn(DUP);
+                mv.visitFieldInsn(GETSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class), "Ljava/lang/invoke/MethodHandle;");
+                mv.visitVarInsn(ALOAD, 2);
                 mv.visitTypeInsn(NEW, "one/nio/serial/gen/GetFieldInputStream");
-                mv.visitInsn(DUP_X1);
-                mv.visitInsn(SWAP);
+                mv.visitInsn(DUP);
+                mv.visitVarInsn(ALOAD, 2);
                 mv.visitVarInsn(ALOAD, 0);
                 mv.visitFieldInsn(GETFIELD, className, "fields", "Ljava/util/Map;");
                 mv.visitMethodInsn(INVOKESPECIAL, "one/nio/serial/gen/GetFieldInputStream", "<init>", "(Ljava/lang/Object;Ljava/util/Map;)V", false);
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/math/BigDecimal;Ljava/io/ObjectInputStream;)V", false);
             }
-            emitInvoke(mv, m);
         }
     }
 

@@ -165,8 +165,7 @@ public class Repository {
         setOptions(InetSocketAddress.class, SKIP_CUSTOM_SERIALIZATION);
         setOptions(StringBuilder.class, SKIP_CUSTOM_SERIALIZATION);
         setOptions(StringBuffer.class, SKIP_CUSTOM_SERIALIZATION);
-//        setOptions(BigInteger.class, SKIP_CUSTOM_SERIALIZATION);
-        setOptions(BigInteger.class, SKIP_WRITE_OBJECT);
+        setOptions(BigInteger.class, SKIP_CUSTOM_SERIALIZATION);
         setOptions(BigDecimal.class, PROVIDE_GET_FIELD);
 
         // At some moment InetAddress fields were moved to an auxilary holder class.

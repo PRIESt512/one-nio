@@ -99,11 +99,9 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
     }
 
     public static void emitGetField(MethodVisitor mv, String className, Field f) {
-//        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? GETSTATIC : GETFIELD;
         String holder = Type.getInternalName(f.getDeclaringClass());
         String name = f.getName();
         String sig = Type.getDescriptor(f.getType());
-//        mv.visitFieldInsn(opcode, holder, name, sig);
         mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitFieldInsn(Opcodes.GETSTATIC, className,
                 getMethodHandleName(name, "GET", f.getType()), "Ljava/lang/invoke/MethodHandle;");
@@ -131,6 +129,37 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
 //        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
 //                "invokeExact", desc, false);
     }
+
+    public static String getMethodHandleName(String fieldName, String accessType, Class type) {
+        if (accessType == null) {
+            accessType = "";
+        }
+        return fieldName.toUpperCase() + "_" + accessType + "_" + getName(type).toUpperCase() + "_MH";
+    }
+
+    private static String getName(Class type) {
+        String[] t = type.getName().split(Pattern.quote("."));
+        String name = t[t.length - 1];
+        if (name.equalsIgnoreCase("[Z")) {
+            return "boolean_array";
+        } else if (name.equalsIgnoreCase("[B")) {
+            return "byte_array";
+        } else if (name.equalsIgnoreCase("[C")) {
+            return "char_array";
+        } else if (name.equalsIgnoreCase("[S")) {
+            return "short_array";
+        } else if (name.equalsIgnoreCase("[I")) {
+            return "int_array";
+        } else if (name.equalsIgnoreCase("[J")) {
+            return "long_array";
+        } else if (name.equalsIgnoreCase("[F")) {
+            return "float_array";
+        } else if (name.equalsIgnoreCase("[D")) {
+            return "double_array";
+        }
+        return name;
+    }
+
 
     public static void emitInvoke(MethodVisitor mv, Method m) {
         int opcode;
@@ -174,12 +203,6 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
             b.append(Type.getDescriptor(parameter));
         }
         return b.append(')').append(Type.getDescriptor(method.returnType())).toString();
-    }
-
-    private static String getMethodHandleName(String fieldName, String accesType, Class type) {
-        String[] t = type.getName().split(Pattern.quote("."));
-        String name = t[t.length - 1];
-        return fieldName.toUpperCase() + "_" + accesType + "_METHOD_HANDLE_" + name;
     }
 
     public static void emitInvoke(MethodVisitor mv, Constructor c) {
