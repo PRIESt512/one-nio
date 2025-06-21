@@ -100,7 +100,6 @@ public class Repository {
         addBootstrap(new DateSerializer());
         addBootstrap(new ClassSerializer());
         addBootstrap(new BitSetSerializer());
-        addBootstrap(new BigIntegerSerializer());
 
         addBootstrap(new BooleanArraySerializer());
         addBootstrap(new ByteArraySerializer());
@@ -157,7 +156,6 @@ public class Repository {
         classMap.put(char.class, classMap.get(Character.class));
         classMap.put(float.class, classMap.get(Float.class));
         classMap.put(double.class, classMap.get(Double.class));
-//        classMap.put(BigInteger.class, classMap.get(BigInteger.class));
 
         // Unable to run readObject/writeObject for the following classes.
         // Fortunately standard serialization works well for them.

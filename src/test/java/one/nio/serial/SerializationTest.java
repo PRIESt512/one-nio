@@ -556,7 +556,7 @@ public class SerializationTest {
         assertEquals(deserializedArray[0], deserializedArray[3]);
     }
 
-    static class GetterSetter implements Serializable {
+    public static class GetterSetter implements Serializable {
         @SerializeWith(getter = "getN")
         int n;
 

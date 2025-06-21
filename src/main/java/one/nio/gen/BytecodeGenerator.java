@@ -112,20 +112,18 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
     }
 
     public static void emitPutField(MethodVisitor mv, String className, Field f) {
-//        int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? PUTSTATIC : PUTFIELD;
-        String holder = Type.getInternalName(f.getDeclaringClass());
-        String name = f.getName();
-        String sig = Type.getDescriptor(f.getType());
-//        mv.visitFieldInsn(opcode, holder, name, sig);
-
 //        mv.visitFieldInsn(Opcodes.GETSTATIC, className,
-//                getMethodHandleName(name, "SET"), "Ljava/lang/invoke/MethodHandle;");
-//        mv.visitVarInsn(Opcodes.ALOAD, 2);
-//        mv.visitVarInsn(Opcodes.ALOAD, 1);
-//        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "one/nio/serial/DataStream",
-//                "readObject", "()Ljava/lang/Object;", false);
-//        mv.visitTypeInsn(Opcodes.CHECKCAST, sig);
+//                getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
+//        mv.visitVarInsn(ALOAD, 2);
+//        mv.visitVarInsn(ALOAD, 1);
+//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
+//        if (srcType == FieldType.Object) emitTypeCast(mv, Object.class, sourceClass);
+//        emitTypeCast(mv, sourceClass, ownField.getType());
+//
+//        String holder = Type.getInternalName(ownField.getDeclaringClass());
+//        String sig = Type.getDescriptor(ownField.getType());
 //        String desc = "(L" + holder + ";" + sig + ")V";
+//
 //        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
 //                "invokeExact", desc, false);
     }
@@ -196,7 +194,7 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         mv.visitMethodInsn(opcode, holder, name, sig, opcode == INVOKEINTERFACE);
     }
 
-    private static String getMethodDescriptor(final MethodType method) {
+    public static String getMethodDescriptor(final MethodType method) {
         StringBuilder b = new StringBuilder().append('(');
         for (Class<?> parameter : method.parameterArray()) {
             b.append(Type.getDescriptor(parameter));

@@ -405,7 +405,6 @@ public class DelegateGenerator extends BytecodeGenerator {
                 mv.visitVarInsn(ALOAD, 2);
                 mv.visitInsn(FieldType.Void.convertTo(srcType));
             } else {
-//                    mv.visitVarInsn(ALOAD, 1);
                 if (fd.parentField() != null) emitGetField(mv, classname, fd.parentField());
                 emitGetSerialField(mv, classname, ownField);
                 emitTypeCast(mv, ownField.getType(), sourceClass);
@@ -481,6 +480,15 @@ public class DelegateGenerator extends BytecodeGenerator {
             Class sourceClass = fd.type().resolve();
             FieldType srcType = FieldType.valueOf(sourceClass);
 
+            if (parentField != null && !parents.contains(parentField)) {
+                parents.add(parentField);
+                if (!isRecord) mv.visitInsn(DUP);
+                emitNewInstance(mv, parentField.getType());
+                mv.visitInsn(DUP);
+                mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+                emitPutSerialField(mv, parentField, isRecord, fd, className);
+            }
+
             if (isNotSerial(ownField)) {
                 mv.visitVarInsn(ALOAD, 1);
                 mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
@@ -488,6 +496,24 @@ public class DelegateGenerator extends BytecodeGenerator {
             } else {
                 if (parentField != null) emitGetField(mv, className, parentField);
 
+                SerializeWith serializeWith = fd.ownField().getAnnotation(SerializeWith.class);
+                if (serializeWith != null && !serializeWith.setter().isEmpty()) {
+                    try {
+                        mv.visitVarInsn(ALOAD, 2);
+                        mv.visitVarInsn(ALOAD, 1);
+
+                        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
+                        mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
+                        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), MethodType.methodType(void.class, fd.ownField().getType()));
+                        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(fd.ownField().getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
+
+                        continue;
+                    } catch (NoSuchMethodException e) {
+                        throw new RuntimeException(e);
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
                 mv.visitFieldInsn(Opcodes.GETSTATIC, className,
                         getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
                 mv.visitVarInsn(ALOAD, 2);
@@ -1208,7 +1234,9 @@ public class DelegateGenerator extends BytecodeGenerator {
         if (serializeWith != null && !serializeWith.getter().isEmpty()) {
             try {
                 MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(f.getDeclaringClass(), serializeWith.getter(), MethodType.methodType(f.getType()));
-                emitInvoke(mv, m);
+                mv.visitVarInsn(ALOAD, 2);
+                mv.visitVarInsn(ALOAD, 1);
+                mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(f.getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
             } catch (NoSuchMethodException e) {
                 throw new IllegalArgumentException("Getter method not found", e);
             } catch (IllegalAccessException e) {
@@ -1236,13 +1264,7 @@ public class DelegateGenerator extends BytecodeGenerator {
             } catch (IllegalAccessException e) {
                 throw new IllegalArgumentException("Incompatible setter method", e);
             }
-        }
-//        else if (Modifier.isFinal(f.getModifiers())) {
-//            FieldType dstType = FieldType.valueOf(f.getType());
-//            mv.visitLdcInsn(unsafe.objectFieldOffset(f));
-//            mv.visitMethodInsn(INVOKESTATIC, "one/nio/util/JavaInternals", dstType.putMethod(), dstType.putSignature(), false);
-//        }
-        else {
+        } else {
             emitPutField(mv, className, f);
         }
     }
