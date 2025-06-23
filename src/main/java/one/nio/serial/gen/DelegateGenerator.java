@@ -992,40 +992,6 @@ public class DelegateGenerator extends BytecodeGenerator {
 
     }
 
-//    private static void emitMHPutSerialField(MethodVisitor mv, FieldDescriptor fd, String className, Runnable emitPayload) {
-//        Class sourceClass = fd.type().resolve();
-//        FieldType srcType = FieldType.valueOf(sourceClass);
-//        SerializeWith serializeWith = fd.ownField().getAnnotation(SerializeWith.class);
-//        if (serializeWith != null && !serializeWith.setter().isEmpty()) {
-//            try {
-//                mv.visitVarInsn(ALOAD, 2);
-//                mv.visitVarInsn(ALOAD, 1);
-//
-//                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-//                mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
-//                MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), MethodType.methodType(void.class, fd.ownField().getType()));
-//                mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(fd.ownField().getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
-//            } catch (NoSuchMethodException e) {
-//                throw new IllegalArgumentException("Setter method not found", e);
-//            } catch (IllegalAccessException e) {
-//                throw new IllegalArgumentException("Incompatible setter method", e);
-//            }
-//        } else {
-//            mv.visitFieldInsn(Opcodes.GETSTATIC, className,
-//                    getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
-//            mv.visitVarInsn(ALOAD, 2);
-//
-//            emitPayload.run();
-//
-//            String holder = Type.getInternalName(fd.ownField().getDeclaringClass());
-//            String sig = Type.getDescriptor(fd.ownField().getType());
-//            String desc = "(L" + holder + ";" + sig + ")V";
-//
-//            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
-//                    "invokeExact", desc, false);
-//        }
-//    }
-
     private static void emitDefaultValue(MethodVisitor mv, Field field, Class<?> fieldType, String value) {
         switch (FieldType.valueOf(fieldType)) {
             case Int:
