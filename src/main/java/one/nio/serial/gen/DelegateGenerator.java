@@ -130,32 +130,7 @@ public class DelegateGenerator extends BytecodeGenerator {
     private static void generateMethodHandleFields(ClassWriter cv, Class cls, String className, FieldDescriptor[] fds, FieldDescriptor[] defaultFields) {
         boolean isException = Throwable.class.isAssignableFrom(cls);
 
-        // generating MethodHandle fields for access to read/writeObject methods
-        MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
-        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
-                "writeObject", methodType);
-        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
-            cv.visitField(
-                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
-                    getMethodHandleName("WRITE_OBJECT", null, Void.class),
-                    "Ljava/lang/invoke/MethodHandle;",
-                    null,
-                    null
-            ).visitEnd();
-        }
-
-        methodType = MethodType.methodType(void.class, ObjectInputStream.class);
-        m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
-                "readObject", methodType);
-        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_READ_OBJECT)) {
-            cv.visitField(
-                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
-                    getMethodHandleName("READ_OBJECT", null, Void.class),
-                    "Ljava/lang/invoke/MethodHandle;",
-                    null,
-                    null
-            ).visitEnd();
-        }
+        generateReadWriteMH(cv, cls, isException);
 
         // generating MethodHandle fields to access object fields
         FieldDescriptor[] unionFields = Stream.concat(Arrays.stream(fds), Arrays.stream(defaultFields)).toArray(FieldDescriptor[]::new);
@@ -210,8 +185,74 @@ public class DelegateGenerator extends BytecodeGenerator {
                 "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 0);
 
-        methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
+        generateReadWriteObjectMHBody(mv, cls, className, isException);
+
+        for (FieldDescriptor fd : unionFields) {
+            generateMethodHandleInit(mv, className, fd);
+        }
+
+        mv.visitLabel(tryEnd);
+        Label end = new Label();
+        mv.visitJumpInsn(Opcodes.GOTO, end);
+
+        // Catch ReflectiveOperationException
+        mv.visitLabel(catchReflective);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/ExceptionInInitializerError");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/ExceptionInInitializerError", "<init>",
+                "(Ljava/lang/Throwable;)V", false);
+        mv.visitInsn(Opcodes.ATHROW);
+
+        // Catch Throwable
+        mv.visitLabel(catchThrowable);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
+                "(Ljava/lang/Throwable;)V", false);
+        mv.visitInsn(Opcodes.ATHROW);
+
+        mv.visitLabel(end);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+    }
+
+    private static void generateReadWriteMH(ClassWriter cv, Class cls, boolean isException) {
+        // generating MethodHandle fields for access to read/writeObject methods
+        MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
+                "writeObject", methodType);
+        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_WRITE_OBJECT)) {
+            cv.visitField(
+                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                    getMethodHandleName("WRITE_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;",
+                    null,
+                    null
+            ).visitEnd();
+        }
+
+        methodType = MethodType.methodType(void.class, ObjectInputStream.class);
         m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
+                "readObject", methodType);
+        if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_READ_OBJECT)) {
+            cv.visitField(
+                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                    getMethodHandleName("READ_OBJECT", null, Void.class),
+                    "Ljava/lang/invoke/MethodHandle;",
+                    null,
+                    null
+            ).visitEnd();
+        }
+    }
+
+    private static void generateReadWriteObjectMHBody(MethodVisitor mv, Class cls, String className, boolean isException) {
+        MethodType methodType = MethodType.methodType(void.class, ObjectOutputStream.class);
+        MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls,
                 "writeObject", methodType);
 
         //generate to writeObject
@@ -251,39 +292,6 @@ public class DelegateGenerator extends BytecodeGenerator {
             mv.visitFieldInsn(Opcodes.PUTSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class),
                     "Ljava/lang/invoke/MethodHandle;");
         }
-
-        for (FieldDescriptor fd : unionFields) {
-            generateMethodHandleInit(mv, className, fd);
-        }
-
-        mv.visitLabel(tryEnd);
-        Label end = new Label();
-        mv.visitJumpInsn(Opcodes.GOTO, end);
-
-        // Catch ReflectiveOperationException
-        mv.visitLabel(catchReflective);
-        mv.visitVarInsn(Opcodes.ASTORE, 0);
-        mv.visitTypeInsn(Opcodes.NEW, "java/lang/ExceptionInInitializerError");
-        mv.visitInsn(Opcodes.DUP);
-        mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/ExceptionInInitializerError", "<init>",
-                "(Ljava/lang/Throwable;)V", false);
-        mv.visitInsn(Opcodes.ATHROW);
-
-        // Catch Throwable
-        mv.visitLabel(catchThrowable);
-        mv.visitVarInsn(Opcodes.ASTORE, 0);
-        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
-        mv.visitInsn(Opcodes.DUP);
-        mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
-                "(Ljava/lang/Throwable;)V", false);
-        mv.visitInsn(Opcodes.ATHROW);
-
-        mv.visitLabel(end);
-        mv.visitInsn(Opcodes.RETURN);
-        mv.visitMaxs(0, 0);
-        mv.visitEnd();
     }
 
     private static void generateMethodHandleInit(MethodVisitor mv, String className, FieldDescriptor fd) {
@@ -499,7 +507,12 @@ public class DelegateGenerator extends BytecodeGenerator {
                 mv.visitInsn(srcType.convertTo(FieldType.Void));
             } else {
                 if (parentField != null) emitMHGetField(mv, className, parentField);
-                emitMHSerialField(mv, isRecord, fd, className);
+                emitMHPutSerialField(mv, fd, isRecord, className, () -> {
+                    mv.visitVarInsn(ALOAD, 1);
+                    mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
+                    if (srcType == FieldType.Object) emitTypeCast(mv, Object.class, sourceClass);
+                    emitTypeCast(mv, sourceClass, ownField.getType());
+                });
             }
         }
 
@@ -538,113 +551,25 @@ public class DelegateGenerator extends BytecodeGenerator {
         mv.visitEnd();
     }
 
-    private static void generateReadOriginal(ClassVisitor cv, Class cls, FieldDescriptor[] fds, FieldDescriptor[]
-            defaultFields, String className) {
-        MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | ACC_FINAL, "read", "(Lone/nio/serial/DataStream;)Ljava/lang/Object;",
-                null, new String[]{"java/io/IOException", "java/lang/ClassNotFoundException"});
-        mv.visitCode();
-
-        mv.visitVarInsn(ALOAD, 1);
-        mv.visitTypeInsn(NEW, Type.getInternalName(cls));
-        mv.visitInsn(DUP_X1);
-        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", "register", "(Ljava/lang/Object;)V", false);
-
-        ArrayList<Field> parents = new ArrayList<>();
-        boolean isRecord = JavaFeatures.isRecord(cls);
-        for (FieldDescriptor fd : fds) {
-            Field ownField = fd.ownField();
-            Field parentField = fd.parentField();
-            Class sourceClass = fd.type().resolve();
-            FieldType srcType = FieldType.valueOf(sourceClass);
-
-            if (parentField != null && !parents.contains(parentField)) {
-                parents.add(parentField);
-                if (!isRecord) mv.visitInsn(DUP);
-                emitNewInstance(mv, parentField.getType());
-                mv.visitInsn(DUP);
-                mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-                emitPutSerialField(mv, parentField, isRecord, fd, className);
-            }
-
-            if (isNotSerial(ownField)) {
-                mv.visitVarInsn(ALOAD, 1);
-                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-                mv.visitInsn(srcType.convertTo(FieldType.Void));
-            } else {
-                if (!isRecord) mv.visitInsn(DUP);
-                if (parentField != null) emitMHGetField(mv, className, parentField);
-                mv.visitVarInsn(ALOAD, 1);
-                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-                if (srcType == FieldType.Object) emitTypeCast(mv, Object.class, sourceClass);
-                emitTypeCast(mv, sourceClass, ownField.getType());
-                emitPutSerialField(mv, ownField, isRecord, fd, className);
-            }
-        }
-
-        for (FieldDescriptor defaultField : defaultFields) {
-            setDefaultField(mv, defaultField, isRecord, className);
-        }
-
-        if (isRecord) {
-            generateCreateRecord(mv, cls, fds, defaultFields);
-        }
-
-        emitReadObject(cls, mv, className);
-
-//        // return value
-//        mv.visitVarInsn(Opcodes.ALOAD, 2);
-//        mv.visitLabel(tryEnd);
-//        mv.visitInsn(Opcodes.ARETURN);
-//
-//        // Catch Exception
-//        mv.visitLabel(catchException);
-//        mv.visitVarInsn(Opcodes.ASTORE, 3);
-//        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
-//        mv.visitInsn(Opcodes.DUP);
-//        mv.visitVarInsn(Opcodes.ALOAD, 3);
-//        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
-//                "(Ljava/lang/Throwable;)V", false);
-//        mv.visitInsn(Opcodes.ATHROW);
-//
-//        // Catch Throwable
-//        mv.visitLabel(catchThrowable);
-//        mv.visitVarInsn(Opcodes.ASTORE, 3);
-//        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
-//        mv.visitInsn(Opcodes.DUP);
-//        mv.visitVarInsn(Opcodes.ALOAD, 3);
-//        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
-//                "(Ljava/lang/Throwable;)V", false);
-//        mv.visitInsn(Opcodes.ATHROW);
-//
-//        mv.visitMaxs(0, 0);
-//        mv.visitEnd();
-        mv.visitInsn(ARETURN);
-        mv.visitMaxs(0, 0);
-        mv.visitEnd();
-    }
-
     private static void emitReadObject(Class cls, MethodVisitor mv, String className) {
         boolean isException = Throwable.class.isAssignableFrom(cls);
         MethodType methodType = MethodType.methodType(void.class, ObjectInputStream.class);
         MethodHandleInfo m = MethodHandlesReflection.findInstanceMethod(isException ? Throwable.class : cls, "readObject", methodType);
         if (m != null && !Repository.hasOptions(m.getDeclaringClass(), Repository.SKIP_READ_OBJECT)) {
+            Class clazz = m.getDeclaringClass();
             if (!Repository.hasOptions(m.getDeclaringClass(), Repository.PROVIDE_GET_FIELD)) {
-                Class clazz = m.getDeclaringClass();
-                mv.visitFieldInsn(GETSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class), "Ljava/lang/invoke/MethodHandle;");
-                mv.visitVarInsn(ALOAD, 2);
-                mv.visitFieldInsn(GETSTATIC, "one/nio/serial/gen/NullObjectInputStream", "INSTANCE", "Lone/nio/serial/gen/NullObjectInputStream;");
-                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(" + Type.getDescriptor(clazz) + "Ljava/io/ObjectInputStream;)V", false);
+                emitMHPutField(mv, null, className, true, clazz, () ->
+                        mv.visitFieldInsn(GETSTATIC, "one/nio/serial/gen/NullObjectInputStream", "INSTANCE", "Lone/nio/serial/gen/NullObjectInputStream;")
+                );
             } else {
-                Class clazz = m.getDeclaringClass();
-                mv.visitFieldInsn(GETSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class), "Ljava/lang/invoke/MethodHandle;");
-                mv.visitVarInsn(ALOAD, 2);
-                mv.visitTypeInsn(NEW, "one/nio/serial/gen/GetFieldInputStream");
-                mv.visitInsn(DUP);
-                mv.visitVarInsn(ALOAD, 2);
-                mv.visitVarInsn(ALOAD, 0);
-                mv.visitFieldInsn(GETFIELD, className, "fields", "Ljava/util/Map;");
-                mv.visitMethodInsn(INVOKESPECIAL, "one/nio/serial/gen/GetFieldInputStream", "<init>", "(Ljava/lang/Object;Ljava/util/Map;)V", false);
-                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(" + Type.getDescriptor(clazz) + "Ljava/io/ObjectInputStream;)V", false);
+                emitMHPutField(mv, null, className, true, clazz, () -> {
+                    mv.visitTypeInsn(NEW, "one/nio/serial/gen/GetFieldInputStream");
+                    mv.visitInsn(DUP);
+                    mv.visitVarInsn(ALOAD, 2);
+                    mv.visitVarInsn(ALOAD, 0);
+                    mv.visitFieldInsn(GETFIELD, className, "fields", "Ljava/util/Map;");
+                    mv.visitMethodInsn(INVOKESPECIAL, "one/nio/serial/gen/GetFieldInputStream", "<init>", "(Ljava/lang/Object;Ljava/util/Map;)V", false);
+                });
             }
         }
     }
@@ -1040,7 +965,7 @@ public class DelegateGenerator extends BytecodeGenerator {
         if (defaultValue == null) {
             mv.visitInsn(FieldType.Void.convertTo(FieldType.valueOf(fieldType)));
         } else if (!defaultValue.method().isEmpty()) {
-            emitMHPutSerialField(mv, fd, className, () -> {
+            emitMHPutSerialField(mv, fd, isRecord, className, () -> {
                 String methodName = defaultValue.method();
                 int p = methodName.lastIndexOf('.');
                 Method m = JavaInternals.findMethod(methodName.substring(0, p), methodName.substring(p + 1));
@@ -1050,7 +975,7 @@ public class DelegateGenerator extends BytecodeGenerator {
                 emitInvoke(mv, m);
             });
         } else if (!defaultValue.field().isEmpty()) {
-            emitMHPutSerialField(mv, fd, className, () -> {
+            emitMHPutSerialField(mv, fd, isRecord, className, () -> {
                 String fieldName = defaultValue.field();
                 int p = fieldName.lastIndexOf('.');
                 Field f = JavaInternals.findField(fieldName.substring(0, p), fieldName.substring(p + 1));
@@ -1060,44 +985,46 @@ public class DelegateGenerator extends BytecodeGenerator {
                 emitGetField(mv, f);
             });
         } else {
-            emitMHPutSerialField(mv, fd, className, () -> {
+            emitMHPutSerialField(mv, fd, isRecord, className, () -> {
                 emitDefaultValue(mv, field, fieldType, defaultValue.value());
             });
         }
+
     }
 
-    private static void emitMHPutSerialField(MethodVisitor mv, FieldDescriptor fd, String className, Runnable method) {
-        Class sourceClass = fd.type().resolve();
-        Field field = fd.ownField();
-        FieldType srcType = FieldType.valueOf(sourceClass);
-        SerializeWith serializeWith = fd.ownField().getAnnotation(SerializeWith.class);
-        if (serializeWith != null && !serializeWith.setter().isEmpty()) {
-            try {
-                mv.visitVarInsn(ALOAD, 2);
-                mv.visitVarInsn(ALOAD, 1);
-
-                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-                mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
-                MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), MethodType.methodType(void.class, fd.ownField().getType()));
-                mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(fd.ownField().getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
-            } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            mv.visitFieldInsn(Opcodes.GETSTATIC, className,
-                    getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
-            mv.visitVarInsn(ALOAD, 2);
-            method.run();
-            String holder = Type.getInternalName(fd.ownField().getDeclaringClass());
-            String sig = Type.getDescriptor(fd.ownField().getType());
-            String desc = "(L" + holder + ";" + sig + ")V";
-
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
-                    "invokeExact", desc, false);
-        }
-    }
+//    private static void emitMHPutSerialField(MethodVisitor mv, FieldDescriptor fd, String className, Runnable emitPayload) {
+//        Class sourceClass = fd.type().resolve();
+//        FieldType srcType = FieldType.valueOf(sourceClass);
+//        SerializeWith serializeWith = fd.ownField().getAnnotation(SerializeWith.class);
+//        if (serializeWith != null && !serializeWith.setter().isEmpty()) {
+//            try {
+//                mv.visitVarInsn(ALOAD, 2);
+//                mv.visitVarInsn(ALOAD, 1);
+//
+//                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
+//                mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
+//                MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), MethodType.methodType(void.class, fd.ownField().getType()));
+//                mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(fd.ownField().getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
+//            } catch (NoSuchMethodException e) {
+//                throw new IllegalArgumentException("Setter method not found", e);
+//            } catch (IllegalAccessException e) {
+//                throw new IllegalArgumentException("Incompatible setter method", e);
+//            }
+//        } else {
+//            mv.visitFieldInsn(Opcodes.GETSTATIC, className,
+//                    getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
+//            mv.visitVarInsn(ALOAD, 2);
+//
+//            emitPayload.run();
+//
+//            String holder = Type.getInternalName(fd.ownField().getDeclaringClass());
+//            String sig = Type.getDescriptor(fd.ownField().getType());
+//            String desc = "(L" + holder + ";" + sig + ")V";
+//
+//            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
+//                    "invokeExact", desc, false);
+//        }
+//    }
 
     private static void emitDefaultValue(MethodVisitor mv, Field field, Class<?> fieldType, String value) {
         switch (FieldType.valueOf(fieldType)) {
@@ -1260,9 +1187,21 @@ public class DelegateGenerator extends BytecodeGenerator {
         }
     }
 
-    private static void emitMHSerialField(MethodVisitor mv, boolean isRecord, FieldDescriptor fd, String
-            className) {
-        Field ownField = fd.ownField();
+    private static void emitMHGetField(MethodVisitor mv, String className, Field f) {
+        String holder = Type.getInternalName(f.getDeclaringClass());
+        String name = f.getName();
+        String sig = Type.getDescriptor(f.getType());
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
+        mv.visitFieldInsn(Opcodes.GETSTATIC, className,
+                getMethodHandleName(name, "GET", f.getType()), "Ljava/lang/invoke/MethodHandle;");
+        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        String desc = "(L" + holder + ";)" + sig;
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
+                "invokeExact", desc, false);
+    }
+
+    private static void emitMHPutSerialField(MethodVisitor mv, FieldDescriptor fd, boolean isRecord,
+                                             String className, Runnable emitPayload) {
         Class sourceClass = fd.type().resolve();
         FieldType srcType = FieldType.valueOf(sourceClass);
         SerializeWith serializeWith = fd.ownField().getAnnotation(SerializeWith.class);
@@ -1274,28 +1213,42 @@ public class DelegateGenerator extends BytecodeGenerator {
                 mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
                 mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
                 MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), MethodType.methodType(void.class, fd.ownField().getType()));
-                mv.visitMethodInsn(INVOKEVIRTUAL, Type.getType(fd.ownField().getDeclaringClass()).getInternalName(), m.getName(), getMethodDescriptor(m.getMethodType()), false);
-
+                String methodDesc = getMethodDescriptor(m.getMethodType());
+                String type = Type.getType(fd.ownField().getDeclaringClass()).getInternalName();
+                mv.visitMethodInsn(INVOKEVIRTUAL, type, m.getName(), methodDesc, false);
             } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
+                throw new IllegalArgumentException("Setter method not found", e);
             } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
+                throw new IllegalArgumentException("Incompatible setter method", e);
             }
         } else {
+            emitMHPutField(mv, fd, className, false, null, emitPayload);
+        }
+    }
+
+    private static void emitMHPutField(MethodVisitor mv, FieldDescriptor fd, String className, boolean isReadObject, Class clazz, Runnable emitPayload) {
+        if (!isReadObject) {
             mv.visitFieldInsn(Opcodes.GETSTATIC, className,
                     getMethodHandleName(fd.name(), "SET", fd.ownField().getType()), "Ljava/lang/invoke/MethodHandle;");
-            mv.visitVarInsn(ALOAD, 2);
-            mv.visitVarInsn(ALOAD, 1);
-            mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-            if (srcType == FieldType.Object) emitTypeCast(mv, Object.class, sourceClass);
-            emitTypeCast(mv, sourceClass, ownField.getType());
+        } else {
+            mv.visitFieldInsn(GETSTATIC, className, getMethodHandleName("READ_OBJECT", null, Void.class), "Ljava/lang/invoke/MethodHandle;");
+        }
+        mv.visitVarInsn(ALOAD, 2);
 
+        // supplier arg to MH
+        emitPayload.run();
+
+        if (!isReadObject) {
+            Field ownField = fd.ownField();
             String holder = Type.getInternalName(ownField.getDeclaringClass());
             String sig = Type.getDescriptor(ownField.getType());
             String desc = "(L" + holder + ";" + sig + ")V";
 
             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
                     "invokeExact", desc, false);
+        } else {
+            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact",
+                    "(" + Type.getDescriptor(clazz) + "Ljava/io/ObjectInputStream;)V", false);
         }
     }
 

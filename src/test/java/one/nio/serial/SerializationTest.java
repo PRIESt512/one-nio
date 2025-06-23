@@ -690,7 +690,7 @@ public class SerializationTest {
         String someDataBase64 = "HpVKIjDpW8vuAAJzMf/uAAJzNA==";
 
         // Old SomeData Serializer
-        String someDataSerializerBase64 = "zAApb25lLm5pby5zZXJpYWwuU2VyaWFsaXphdGlvblRlc3QkU29tZURhdGEelUoiMOlbywADAAJzMf8AEGphdmEubGFuZy5TdHJpbmcAAnMy/wAQamF2YS5sYW5nLlN0cmluZwACczT/ABBqYXZhLmxhbmcuU3RyaW5n";
+        String someDataSerializerBase64 = "zQApb25lLm5pby5zZXJpYWwuU2VyaWFsaXphdGlvblRlc3QkU29tZURhdGEelUoiMOlbywADAAJzMf8AEGphdmEubGFuZy5TdHJpbmcAAnMy/wAQamF2YS5sYW5nLlN0cmluZwACczT/ABBqYXZhLmxhbmcuU3RyaW5n";
         Repository.provideSerializer(someDataSerializerBase64);
 
         DeserializeStream in = new DeserializeStream(Base64.decodeFromChars(someDataBase64.toCharArray()));

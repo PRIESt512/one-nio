@@ -98,19 +98,6 @@ public class BytecodeGenerator extends ClassLoader implements BytecodeGeneratorM
         }
     }
 
-    public static void emitMHGetField(MethodVisitor mv, String className, Field f) {
-        String holder = Type.getInternalName(f.getDeclaringClass());
-        String name = f.getName();
-        String sig = Type.getDescriptor(f.getType());
-        mv.visitVarInsn(Opcodes.ALOAD, 2);
-        mv.visitFieldInsn(Opcodes.GETSTATIC, className,
-                getMethodHandleName(name, "GET", f.getType()), "Ljava/lang/invoke/MethodHandle;");
-        mv.visitVarInsn(Opcodes.ALOAD, 1);
-        String desc = "(L" + holder + ";)" + sig;
-        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/MethodHandle",
-                "invokeExact", desc, false);
-    }
-
     public static void emitGetField(MethodVisitor mv, Field f) {
         int opcode = (f.getModifiers() & Modifier.STATIC) != 0 ? GETSTATIC : GETFIELD;
         String holder = Type.getInternalName(f.getDeclaringClass());
