@@ -496,7 +496,6 @@ public class DelegateGenerator extends BytecodeGenerator {
         }
 
         ArrayList<Field> parents = new ArrayList<>();
-        final int[] index = {0};
         for (FieldDescriptor fd : fds) {
             Field ownField = fd.ownField();
             Field parentField = fd.parentField();
@@ -518,8 +517,7 @@ public class DelegateGenerator extends BytecodeGenerator {
                 mv.visitInsn(srcType.convertTo(FieldType.Void));
                 if (isRecord) {
                     emitDefaultValueForRecord(mv, ownField.getType());
-                    mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 3 + index[0] * 2);
-                    index[0] = index[0] + 1;
+                    mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 3 + fd.index() * 2);
                 }
             } else {
                 if (parentField != null) emitMHGetField(mv, className, parentField);
@@ -529,8 +527,7 @@ public class DelegateGenerator extends BytecodeGenerator {
                     if (srcType == FieldType.Object) emitTypeCast(mv, Object.class, sourceClass);
                     emitTypeCast(mv, sourceClass, ownField.getType());
                     if (isRecord) {
-                        mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 3 + index[0] * 2);
-                        index[0] = index[0] + 1;
+                        mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 3 + fd.index() * 2);
                     }
                 });
             }
@@ -998,7 +995,6 @@ public class DelegateGenerator extends BytecodeGenerator {
         }
 
         Class<?> fieldType = field.getType();
-//        if (!isRecord) mv.visitInsn(DUP);
 
         if (defaultValue == null) {
             mv.visitInsn(FieldType.Void.convertTo(FieldType.valueOf(fieldType)));
@@ -1011,6 +1007,9 @@ public class DelegateGenerator extends BytecodeGenerator {
                     throw new IllegalArgumentException("Invalid default initializer " + methodName + " for field " + field);
                 }
                 emitInvoke(mv, m);
+                if (isRecord) {
+                    mv.visitVarInsn(Type.getType(field.getType()).getOpcode(ISTORE), 3 + fd.index() * 2);
+                }
             });
         } else if (!defaultValue.field().isEmpty()) {
             emitMHPutSerialField(mv, fd, isRecord, className, () -> {
@@ -1021,13 +1020,18 @@ public class DelegateGenerator extends BytecodeGenerator {
                     throw new IllegalArgumentException("Invalid default initializer " + fieldName + " for field " + field);
                 }
                 emitGetField(mv, f);
+                if (isRecord) {
+                    mv.visitVarInsn(Type.getType(field.getType()).getOpcode(ISTORE), 3 + fd.index() * 2);
+                }
             });
         } else {
             emitMHPutSerialField(mv, fd, isRecord, className, () -> {
                 emitDefaultValue(mv, field, fieldType, defaultValue.value());
+                if (isRecord) {
+                    mv.visitVarInsn(Type.getType(field.getType()).getOpcode(ISTORE), 3 + fd.index() * 2);
+                }
             });
         }
-
     }
 
     private static void emitDefaultValue(MethodVisitor mv, Field field, Class<?> fieldType, String value) {
