@@ -19,6 +19,7 @@ package one.nio.serial.gen;
 import one.nio.gen.BytecodeGenerator;
 import one.nio.serial.Default;
 import one.nio.serial.FieldDescriptor;
+import one.nio.serial.JsonName;
 import one.nio.serial.NotSerial;
 import one.nio.serial.Repository;
 import one.nio.serial.SerializeWith;
@@ -50,6 +51,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -538,7 +540,7 @@ public class DelegateGenerator extends BytecodeGenerator {
         }
 
         if (isRecord) {
-            generateCreateRecord(mv, cls, fds, defaultFields);
+            generateCreateRecord(mv, cls, fds, defaultFields, false);
         }
 
         emitReadObject(cls, mv, className);
@@ -643,54 +645,54 @@ public class DelegateGenerator extends BytecodeGenerator {
                 null, new String[]{"java/io/IOException"});
         mv.visitCode();
 
-//        mv.visitVarInsn(ALOAD, 1);
-//        emitTypeCast(mv, Object.class, cls);
-//        mv.visitVarInsn(ASTORE, 1);
-//
-//        boolean firstWritten = false;
-//        mv.visitVarInsn(ALOAD, 2);
-//
-//        for (FieldDescriptor fd : fds) {
-//            Field ownField = fd.ownField();
-//            if (isNotSerial(ownField)) {
-//                continue;
-//            }
-//
-//            JsonName jsonName = ownField.getAnnotation(JsonName.class);
-//            String fieldName = jsonName != null ? jsonName.value() : ownField.getName();
-//            mv.visitLdcInsn((firstWritten ? ',' : '{') + "\"" + fieldName + "\":");
-//            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
-//            firstWritten = true;
-//
-//            Class sourceClass = fd.type().resolve();
-//            FieldType srcType = FieldType.valueOf(sourceClass);
-//
-//            mv.visitVarInsn(ALOAD, 1);
+        mv.visitVarInsn(ALOAD, 1);
+        emitTypeCast(mv, Object.class, cls);
+        mv.visitVarInsn(ASTORE, 1);
+
+        boolean firstWritten = false;
+        mv.visitVarInsn(ALOAD, 2);
+
+        for (FieldDescriptor fd : fds) {
+            Field ownField = fd.ownField();
+            if (isNotSerial(ownField)) {
+                continue;
+            }
+
+            JsonName jsonName = ownField.getAnnotation(JsonName.class);
+            String fieldName = jsonName != null ? jsonName.value() : ownField.getName();
+            mv.visitLdcInsn((firstWritten ? ',' : '{') + "\"" + fieldName + "\":");
+            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+            firstWritten = true;
+
+            Class sourceClass = fd.type().resolve();
+            FieldType srcType = FieldType.valueOf(sourceClass);
+
+            mv.visitVarInsn(ALOAD, 1);
 //            if (fd.parentField() != null) emitGetField(mv, className, fd.parentField());
-//            emitGetSerialField(mv, className, ownField);
-//            emitTypeCast(mv, ownField.getType(), sourceClass);
-//
-//            switch (srcType) {
-//                case Object:
-//                    mv.visitMethodInsn(INVOKESTATIC, "one/nio/serial/Json", "appendObject", "(Ljava/lang/StringBuilder;Ljava/lang/Object;)V", false);
-//                    mv.visitVarInsn(ALOAD, 2);
-//                    break;
-//                case Char:
-//                    mv.visitMethodInsn(INVOKESTATIC, "one/nio/serial/Json", "appendChar", "(Ljava/lang/StringBuilder;C)V", false);
-//                    mv.visitVarInsn(ALOAD, 2);
-//                    break;
-//                default:
-//                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", srcType.appendSignature(), false);
-//            }
-//        }
-//
-//        if (!firstWritten) {
-//            emitInt(mv, '{');
-//            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;", false);
-//        }
-//        emitInt(mv, '}');
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;", false);
-//        mv.visitInsn(POP);
+            emitMHGetSerialField(mv, className, ownField);
+            emitTypeCast(mv, ownField.getType(), sourceClass);
+
+            switch (srcType) {
+                case Object:
+                    mv.visitMethodInsn(INVOKESTATIC, "one/nio/serial/Json", "appendObject", "(Ljava/lang/StringBuilder;Ljava/lang/Object;)V", false);
+                    mv.visitVarInsn(ALOAD, 2);
+                    break;
+                case Char:
+                    mv.visitMethodInsn(INVOKESTATIC, "one/nio/serial/Json", "appendChar", "(Ljava/lang/StringBuilder;C)V", false);
+                    mv.visitVarInsn(ALOAD, 2);
+                    break;
+                default:
+                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", srcType.appendSignature(), false);
+            }
+        }
+
+        if (!firstWritten) {
+            emitInt(mv, '{');
+            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;", false);
+        }
+        emitInt(mv, '}');
+        mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;", false);
+        mv.visitInsn(POP);
 
         mv.visitInsn(RETURN);
         mv.visitMaxs(0, 0);
@@ -699,145 +701,154 @@ public class DelegateGenerator extends BytecodeGenerator {
 
     private static void generateFromJson(ClassVisitor cv, Class cls, FieldDescriptor[] fds, FieldDescriptor[]
             defaultFields, String className) {
+        boolean isRecord = JavaFeatures.isRecord(cls);
+
         MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | ACC_FINAL, "fromJson", "(Lone/nio/serial/JsonReader;)Ljava/lang/Object;",
                 null, new String[]{"java/io/IOException", "java/lang/ClassNotFoundException"});
-        mv.visitCode();
-        mv.visitInsn(ACONST_NULL);
-        mv.visitInsn(ARETURN);
-//        mv.visitLocalVariable("this", "Lone/nio/Sample;", null, 0);
-        mv.visitMaxs(1, 1);
-        mv.visitEnd();
-
-//        // Find opening '{'
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitIntInsn(BIPUSH, '{');
-//        mv.visitLdcInsn("Expected object");
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
-//
-//        // Create instance
-//        mv.visitTypeInsn(NEW, Type.getInternalName(cls));
-//
-//        // Prepare a multimap (fieldHash -> fds) for lookupswitch
-//        TreeMap<Integer, FieldDescriptor> fieldHashes = new TreeMap<>();
-//        boolean isRecord = JavaFeatures.isRecord(cls);
-//        for (FieldDescriptor fd : fds) {
-//            Field ownField = fd.ownField();
-//            if (isNotSerial(ownField)) {
-//                continue;
-//            }
-//            fd.next = fieldHashes.put(ownField.getName().hashCode(), fd);
-//            setDefaultField(mv, fd, isRecord, className);
-//        }
-//
-//        // Initialize default fields before parsing fields from JSON
-//        for (FieldDescriptor fd : defaultFields) {
-//            Field ownField = fd.ownField();
-//            fd.next = fieldHashes.put(ownField.getName().hashCode(), fd);
-//            setDefaultField(mv, fd, isRecord, className);
-//        }
-//
-//        // Repeat until '}'
-//        Label done = new Label();
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
-//        mv.visitIntInsn(BIPUSH, '}');
-//        mv.visitJumpInsn(IF_ICMPEQ, done);
-//
-//        // Read key
-//        Label loop = new Label();
-//        mv.visitLabel(loop);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "readString", "()Ljava/lang/String;", false);
-//        mv.visitVarInsn(ASTORE, 2);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
-//        mv.visitInsn(POP);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitIntInsn(BIPUSH, ':');
-//        mv.visitLdcInsn("Expected key-value pair");
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
-//        mv.visitInsn(POP);
-//
-//        // Prepare labels for lookupswitch
-//        Label parseNextField = new Label();
-//        Label skipUnknownField = new Label();
-//        Label[] switchLabels = new Label[fieldHashes.size()];
-//
-//        // Use lookupswitch only if there are multiple hashes
-//        if (switchLabels.length > 1) {
-//            int[] switchKeys = new int[switchLabels.length];
-//            int i = 0;
-//            for (Integer key : fieldHashes.keySet()) {
-//                switchKeys[i] = key;
-//                switchLabels[i] = new Label();
-//                i++;
-//            }
-//
-//            // Emit lookupswitch for the key hashCode
-//            mv.visitVarInsn(ALOAD, 2);
-//            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "hashCode", "()I", false);
-//            mv.visitLookupSwitchInsn(skipUnknownField, switchKeys, switchLabels);
-//        }
-//
-//        // Go through lookupswitch labels
-//        ArrayList<Field> parents = new ArrayList<>();
-//        int i = 0;
-//        for (FieldDescriptor fd : fieldHashes.values()) {
-//            if (switchLabels[i] != null) {
-//                mv.visitLabel(switchLabels[i++]);
-//            }
-//            do {
-//                Label next = new Label();
-//                mv.visitVarInsn(ALOAD, 2);
-//                mv.visitLdcInsn(fd.ownField().getName());
-//                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
-//                mv.visitJumpInsn(IFEQ, fd.next == null ? skipUnknownField : next);
-//                generateReadJsonField(mv, fd, parents, isRecord, className);
-//                mv.visitJumpInsn(GOTO, parseNextField);
-//                mv.visitLabel(next);
-//            } while ((fd = fd.next) != null);
-//        }
-//
-//        // Read and discard the value of unknown field
-//        mv.visitLabel(skipUnknownField);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "readObject", "()Ljava/lang/Object;", false);
-//        mv.visitInsn(POP);
-//
-//        // Find '}' for the end or ',' for the next field
-//        mv.visitLabel(parseNextField);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
-//        mv.visitIntInsn(BIPUSH, '}');
-//        mv.visitJumpInsn(IF_ICMPEQ, done);
-//
-//        // Read ','
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitIntInsn(BIPUSH, ',');
-//        mv.visitLdcInsn("Unexpected end of object");
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
-//        mv.visitInsn(POP);
-//        mv.visitJumpInsn(GOTO, loop);
-//
-//        // Finish deserialization and return constructed object
-//        mv.visitLabel(done);
-//        mv.visitVarInsn(ALOAD, 1);
-//        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "read", "()I", false);
-//        mv.visitInsn(POP);
-//
-//        if (isRecord) {
-//            generateCreateRecord(mv, cls, fds, defaultFields);
-//        }
-//
-//        emitReadObject(cls, mv, className);
-//
+//        mv.visitCode();
+//        mv.visitInsn(ACONST_NULL);
 //        mv.visitInsn(ARETURN);
-//        mv.visitMaxs(0, 0);
+//        mv.visitMaxs(1, 1);
 //        mv.visitEnd();
+
+        // Find opening '{'
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitIntInsn(BIPUSH, '{');
+        mv.visitLdcInsn("Expected object");
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
+
+        // Create instance
+//        mv.visitTypeInsn(NEW, Type.getInternalName(cls));
+        if (!isRecord) {
+            emitNewInstance(mv, cls);
+        }
+
+        // Prepare a multimap (fieldHash -> fds) for lookupswitch
+        TreeMap<Integer, FieldDescriptor> fieldHashes = new TreeMap<>();
+        for (FieldDescriptor fd : fds) {
+            Field ownField = fd.ownField();
+            if (!isNotSerial(ownField)) {
+                fd.next = fieldHashes.put(ownField.getName().hashCode(), fd);
+                setDefaultField(mv, fd, isRecord, className);
+            }
+            if (isRecord) {
+                emitDefaultValueForRecord(mv, ownField.getType());
+                mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 4 + fd.index() * 2);
+            }
+        }
+
+        // Initialize default fields before parsing fields from JSON
+        for (FieldDescriptor fd : defaultFields) {
+            Field ownField = fd.ownField();
+            fd.next = fieldHashes.put(ownField.getName().hashCode(), fd);
+            setDefaultField(mv, fd, isRecord, className);
+        }
+
+        // Repeat until '}'
+        Label done = new Label();
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
+        mv.visitIntInsn(BIPUSH, '}');
+        mv.visitJumpInsn(IF_ICMPEQ, done);
+
+        // Read key
+        Label loop = new Label();
+        mv.visitLabel(loop);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "readString", "()Ljava/lang/String;", false);
+        mv.visitVarInsn(ASTORE, 3);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
+        mv.visitInsn(POP);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitIntInsn(BIPUSH, ':');
+        mv.visitLdcInsn("Expected key-value pair");
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
+        mv.visitInsn(POP);
+
+        // Prepare labels for lookupswitch
+        Label parseNextField = new Label();
+        Label skipUnknownField = new Label();
+        Label[] switchLabels = new Label[fieldHashes.size()];
+
+        // Use lookupswitch only if there are multiple hashes
+        if (switchLabels.length > 1) {
+            int[] switchKeys = new int[switchLabels.length];
+            int i = 0;
+            for (Integer key : fieldHashes.keySet()) {
+                switchKeys[i] = key;
+                switchLabels[i] = new Label();
+                i++;
+            }
+
+            // Emit lookupswitch for the key hashCode
+            mv.visitVarInsn(ALOAD, 3);
+            mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "hashCode", "()I", false);
+            mv.visitLookupSwitchInsn(skipUnknownField, switchKeys, switchLabels);
+        }
+
+        // Go through lookupswitch labels
+        ArrayList<Field> parents = new ArrayList<>();
+        int i = 0;
+        for (FieldDescriptor fd : fieldHashes.values()) {
+            if (switchLabels[i] != null) {
+                mv.visitLabel(switchLabels[i++]);
+            }
+            do {
+                Label next = new Label();
+                mv.visitVarInsn(ALOAD, 3);
+                mv.visitLdcInsn(fd.ownField().getName());
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
+                mv.visitJumpInsn(IFEQ, fd.next == null ? skipUnknownField : next);
+                generateReadJsonField(mv, fd, parents, isRecord, className);
+                mv.visitJumpInsn(GOTO, parseNextField);
+                mv.visitLabel(next);
+            } while ((fd = fd.next) != null);
+        }
+
+        // Read and discard the value of unknown field
+        mv.visitLabel(skipUnknownField);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "readObject", "()Ljava/lang/Object;", false);
+        mv.visitInsn(POP);
+
+        // Find '}' for the end or ',' for the next field
+        mv.visitLabel(parseNextField);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
+        mv.visitIntInsn(BIPUSH, '}');
+        mv.visitJumpInsn(IF_ICMPEQ, done);
+
+        // Read ','
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitIntInsn(BIPUSH, ',');
+        mv.visitLdcInsn("Unexpected end of object");
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "skipWhitespace", "()I", false);
+        mv.visitInsn(POP);
+        mv.visitJumpInsn(GOTO, loop);
+
+        // Finish deserialization and return constructed object
+        mv.visitLabel(done);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "read", "()I", false);
+        mv.visitInsn(POP);
+
+        if (isRecord) {
+            generateCreateRecord(mv, cls, fds, defaultFields, true);
+        }
+
+        emitReadObject(cls, mv, className);
+
+        if (!isRecord) {
+            mv.visitVarInsn(Opcodes.ALOAD, 2);
+        }
+        mv.visitInsn(ARETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
     }
 
     private static void generateReadJsonField(MethodVisitor mv, FieldDescriptor fd, List<Field> parents,
@@ -854,10 +865,14 @@ public class DelegateGenerator extends BytecodeGenerator {
             emitPutSerialField(mv, parentField, isRecord, fd, className);
         }
 
-        if (!isRecord) mv.visitInsn(DUP);
         if (parentField != null) emitMHGetField(mv, className, parentField);
-        generateReadJsonFieldInternal(mv, ownField);
-        emitPutSerialField(mv, ownField, isRecord, fd, className);
+
+        emitMHPutSerialField(mv, fd, isRecord, className, () -> {
+            generateReadJsonFieldInternal(mv, ownField);
+            if (isRecord) {
+                mv.visitVarInsn(Type.getType(ownField.getType()).getOpcode(ISTORE), 4 + fd.index() * 2);
+            }
+        });
     }
 
     private static void generateReadJsonFieldInternal(MethodVisitor mv, Field ownField) {
@@ -878,6 +893,7 @@ public class DelegateGenerator extends BytecodeGenerator {
         emitInt(mv, 'n');
         mv.visitJumpInsn(IF_ICMPNE, notNull);
         mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "readNull", "()Ljava/lang/Object;", false);
+        emitTypeCast(mv, Object.class, fieldClass);
         mv.visitJumpInsn(GOTO, done);
         mv.visitLabel(notNull);
 
@@ -938,7 +954,13 @@ public class DelegateGenerator extends BytecodeGenerator {
     }
 
     private static void generateCreateRecord(MethodVisitor mv, Class<?> cls, FieldDescriptor[]
-            fds, FieldDescriptor[] defaultFields) {
+            fds, FieldDescriptor[] defaultFields, boolean isJson) {
+        int startPosition = 3;
+
+        if (isJson) {
+            startPosition = 4;
+        }
+
         mv.visitTypeInsn(NEW, Type.getInternalName(cls));
         mv.visitInsn(DUP);
 
@@ -960,23 +982,30 @@ public class DelegateGenerator extends BytecodeGenerator {
             args = Arrays.copyOf(args, length);
         }
 
-        int index = 0;
+        int pointerIndex = 0;
         for (int i = 0; i < length; i++) {
-            index = 3 + i * 2;
-            mv.visitVarInsn(Type.getType(args[i]).getOpcode(ILOAD), index);
+            pointerIndex = startPosition + i * 2;
+            mv.visitVarInsn(Type.getType(args[i]).getOpcode(ILOAD), pointerIndex);
+            FieldType srcType = FieldType.valueOf(args[i]);
+            if (srcType == FieldType.Object) {
+                emitTypeCast(mv, Object.class, args[i]);
+            }
         }
 
         try {
-            index++;
+            pointerIndex++;
             emitInvoke(mv, cls.getDeclaredConstructor(args));
-            mv.visitVarInsn(Type.getType(cls).getOpcode(ISTORE), index);
+            mv.visitVarInsn(Type.getType(cls).getOpcode(ISTORE), pointerIndex);
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Cannot find matching canonical constructor for " + cls.getName());
         }
-        mv.visitVarInsn(ALOAD, 1);
-        mv.visitVarInsn(ALOAD, index);
-        mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", "register", "(Ljava/lang/Object;)V", false);
-        mv.visitVarInsn(ALOAD, index);
+
+        if (!isJson) {
+            mv.visitVarInsn(ALOAD, 1);
+            mv.visitVarInsn(ALOAD, pointerIndex);
+            mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", "register", "(Ljava/lang/Object;)V", false);
+        }
+        mv.visitVarInsn(ALOAD, pointerIndex);
     }
 
     private static boolean isConcreteClass(Class cls) {
@@ -1243,10 +1272,8 @@ public class DelegateGenerator extends BytecodeGenerator {
         if (serializeWith != null && !serializeWith.setter().isEmpty()) {
             try {
                 mv.visitVarInsn(ALOAD, 2);
-                mv.visitVarInsn(ALOAD, 1);
+                emitPayload.run();
 
-                mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/DataStream", srcType.readMethod(), srcType.readSignature(), false);
-                mv.visitTypeInsn(CHECKCAST, Type.getInternalName(fd.ownField().getType()));
                 MethodType methodType = MethodType.methodType(void.class, fd.ownField().getType());
                 MethodHandleInfo m = MethodHandlesReflection.findInstanceMethodOrThrow(fd.ownField().getDeclaringClass(), serializeWith.setter(), methodType);
                 String methodDesc = getMethodDescriptor(m.getMethodType());

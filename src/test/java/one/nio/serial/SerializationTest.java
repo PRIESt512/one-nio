@@ -713,14 +713,14 @@ public class SerializationTest {
         assertEquals("s1", clone.s1);
         assertNull(clone.s2);
 
-//        String json = Json.toJson(someRecord);
-//        assertEquals("{\"s1\":\"s1\"}", json);
-//
-//        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\"}".getBytes();
-//        SomeRecord fromJson = new JsonReader(bytes).readObject(SomeRecord.class);
-//
-//        assertEquals("s1", fromJson.s1);
-//        assertNull(fromJson.s2);
+        String json = Json.toJson(someRecord);
+        assertEquals("{\"s1\":\"s1\"}", json);
+
+        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\"}".getBytes();
+        SomeRecord fromJson = new JsonReader(bytes).readObject(SomeRecord.class);
+
+        assertEquals("s1", fromJson.s1);
+        assertNull(fromJson.s2);
     }
 
     public record Color(String name, int r, int g, int b) implements Serializable {
@@ -754,7 +754,7 @@ public class SerializationTest {
         checkSerialize(new PrivateRecord(12.34f, 56.789));
     }
 
-    record Node(Object value, Node left, Node right) implements Serializable {
+    public record Node(Object value, Node left, Node right) implements Serializable {
         Node(Object value) {
             this(value, null, null);
         }
