@@ -645,6 +645,13 @@ public class DelegateGenerator extends BytecodeGenerator {
                 null, new String[]{"java/io/IOException"});
         mv.visitCode();
 
+        Label tryStart = new Label();
+        Label tryEnd = new Label();
+        Label catchThrowable = new Label();
+        mv.visitTryCatchBlock(tryStart, tryEnd, catchThrowable, "java/lang/Throwable");
+
+        mv.visitLabel(tryStart);
+
         mv.visitVarInsn(ALOAD, 1);
         emitTypeCast(mv, Object.class, cls);
         mv.visitVarInsn(ASTORE, 1);
@@ -694,7 +701,18 @@ public class DelegateGenerator extends BytecodeGenerator {
         mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;", false);
         mv.visitInsn(POP);
 
-        mv.visitInsn(RETURN);
+        mv.visitLabel(tryEnd);
+        mv.visitInsn(Opcodes.RETURN);
+
+        mv.visitLabel(catchThrowable);
+        mv.visitVarInsn(Opcodes.ASTORE, 3);
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitVarInsn(Opcodes.ALOAD, 3);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
+                "(Ljava/lang/Throwable;)V", false);
+        mv.visitInsn(Opcodes.ATHROW);
+
         mv.visitMaxs(0, 0);
         mv.visitEnd();
     }
@@ -705,11 +723,17 @@ public class DelegateGenerator extends BytecodeGenerator {
 
         MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | ACC_FINAL, "fromJson", "(Lone/nio/serial/JsonReader;)Ljava/lang/Object;",
                 null, new String[]{"java/io/IOException", "java/lang/ClassNotFoundException"});
-//        mv.visitCode();
-//        mv.visitInsn(ACONST_NULL);
-//        mv.visitInsn(ARETURN);
-//        mv.visitMaxs(1, 1);
-//        mv.visitEnd();
+
+        Label tryStart = new Label();
+        Label tryEnd = new Label();
+        Label catchException = new Label();
+        Label catchThrowable = new Label();
+
+        if (!isRecord) {
+            mv.visitTryCatchBlock(tryStart, tryEnd, catchException, "java/lang/Exception");
+            mv.visitTryCatchBlock(tryStart, tryEnd, catchThrowable, "java/lang/Throwable");
+            mv.visitLabel(tryStart);
+        }
 
         // Find opening '{'
         mv.visitVarInsn(ALOAD, 1);
@@ -718,7 +742,6 @@ public class DelegateGenerator extends BytecodeGenerator {
         mv.visitMethodInsn(INVOKEVIRTUAL, "one/nio/serial/JsonReader", "expect", "(ILjava/lang/String;)V", false);
 
         // Create instance
-//        mv.visitTypeInsn(NEW, Type.getInternalName(cls));
         if (!isRecord) {
             emitNewInstance(mv, cls);
         }
@@ -845,8 +868,31 @@ public class DelegateGenerator extends BytecodeGenerator {
 
         if (!isRecord) {
             mv.visitVarInsn(Opcodes.ALOAD, 2);
+            mv.visitLabel(tryEnd);
+            mv.visitInsn(Opcodes.ARETURN);
+
+            // Catch Exception
+            mv.visitLabel(catchException);
+            mv.visitVarInsn(Opcodes.ASTORE, 3);
+            mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
+            mv.visitInsn(Opcodes.DUP);
+            mv.visitVarInsn(Opcodes.ALOAD, 3);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
+                    "(Ljava/lang/Throwable;)V", false);
+            mv.visitInsn(Opcodes.ATHROW);
+
+            // Catch Throwable
+            mv.visitLabel(catchThrowable);
+            mv.visitVarInsn(Opcodes.ASTORE, 3);
+            mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
+            mv.visitInsn(Opcodes.DUP);
+            mv.visitVarInsn(Opcodes.ALOAD, 3);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException", "<init>",
+                    "(Ljava/lang/Throwable;)V", false);
+            mv.visitInsn(Opcodes.ATHROW);
+        } else {
+            mv.visitInsn(ARETURN);
         }
-        mv.visitInsn(ARETURN);
         mv.visitMaxs(0, 0);
         mv.visitEnd();
     }
