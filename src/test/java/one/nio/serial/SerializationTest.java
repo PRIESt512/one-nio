@@ -699,8 +699,9 @@ public class SerializationTest {
         assertNull(clone.s2);
         assertNull(clone.s3);
     }
-/*
-    static record SomeRecord(String s1, @NotSerial String s2) implements Serializable {}
+
+    public record SomeRecord(String s1, @NotSerial String s2) implements Serializable {
+    }
 
     @Test
     public void testNotSerialRecord() throws IOException, ClassNotFoundException {
@@ -712,17 +713,17 @@ public class SerializationTest {
         assertEquals("s1", clone.s1);
         assertNull(clone.s2);
 
-        String json = Json.toJson(someRecord);
-        assertEquals("{\"s1\":\"s1\"}", json);
-
-        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\"}".getBytes();
-        SomeRecord fromJson = new JsonReader(bytes).readObject(SomeRecord.class);
-
-        assertEquals("s1", fromJson.s1);
-        assertNull(fromJson.s2);
+//        String json = Json.toJson(someRecord);
+//        assertEquals("{\"s1\":\"s1\"}", json);
+//
+//        byte[] bytes = "{\"s1\":\"s1\",\"s2\":\"s2\"}".getBytes();
+//        SomeRecord fromJson = new JsonReader(bytes).readObject(SomeRecord.class);
+//
+//        assertEquals("s1", fromJson.s1);
+//        assertNull(fromJson.s2);
     }
 
-    record Color(String name, int r, int g, int b) implements Serializable {
+    public record Color(String name, int r, int g, int b) implements Serializable {
 
         public Color(String name, String rgb) {
             this(name, hh(rgb, 1, 3), hh(rgb, 3, 5), hh(rgb, 5, 7));
@@ -782,5 +783,5 @@ public class SerializationTest {
         assertEquals(root, root3);
         assertEquals(s, Json.toJson(root2));
     }
-*/
+
 }

@@ -26,6 +26,9 @@ dependencies {
     implementation("org.openjdk.jmh:jmh-core:1.37")
     annotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 
+    implementation("org.eclipse.collections:eclipse-collections-api:11.1.0")
+    implementation("org.eclipse.collections:eclipse-collections:11.1.0")
+
     testImplementation(group = "junit", name = "junit", version = "4.13.1")
     testImplementation(group = "org.apache.logging.log4j", name = "log4j-slf4j-impl", version = "2.24.3")
 }
@@ -69,7 +72,7 @@ val nativeBuildDir = layout.buildDirectory.dir("classes/java/main").get()
 
 tasks.register<Exec>("compileNative") {
     val javaHome = System.getProperty("java.home")
-    doFirst { 
+    doFirst {
         logger.info("Compiling native library...")
         logger.info("Using java from $javaHome")
         nativeBuildDir.asFile.mkdirs()
@@ -134,7 +137,7 @@ jreleaser {
                     javadocJar = true
                     closeRepository = true
                     releaseRepository = false
-                }    
+                }
             }
         }
     }
